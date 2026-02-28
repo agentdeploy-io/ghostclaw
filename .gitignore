@@ -1,0 +1,11 @@
+node_modules
+dist
+data
+caddy_data
+caddy_config
+.DS_Store
+.env
+.env.local
+.env.production
+*.log
+.roorules.md

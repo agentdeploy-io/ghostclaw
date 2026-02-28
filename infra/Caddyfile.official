@@ -1,0 +1,29 @@
+{
+  email {$ACME_EMAIL}
+}
+
+# Domain block for VPS TLS certificates
+{$DOMAIN:localhost} {
+  encode gzip zstd
+  reverse_proxy ironclaw:8080
+
+  header {
+    X-Content-Type-Options "nosniff"
+    X-Frame-Options "DENY"
+    Referrer-Policy "strict-origin-when-cross-origin"
+    Permissions-Policy "geolocation=(), microphone=(), camera=()"
+  }
+}
+
+# Fallback HTTP block for local/tunnel traffic
+:80 {
+  encode gzip zstd
+  reverse_proxy ironclaw:8080
+
+  header {
+    X-Content-Type-Options "nosniff"
+    X-Frame-Options "DENY"
+    Referrer-Policy "strict-origin-when-cross-origin"
+    Permissions-Policy "geolocation=(), microphone=(), camera=()"
+  }
+}

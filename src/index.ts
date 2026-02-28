@@ -1,0 +1,318 @@
+import { randomUUID } from "node:crypto";
+
+import Fastify, { type FastifyReply, type FastifyRequest } from "fastify";
+
+import { appConfig } from "./config.js";
+import { AppError } from "./errors.js";
+import { createAutomationQueue, createRedisConnection } from "./lib/queue.js";
+import { sendTelegramMessage } from "./lib/telegram.js";
+import { logger } from "./logger.js";
+import { createJobSchema, telegramUpdateSchema } from "./schemas.js";
+import type { ApiErrorBody, AutomationJobPayload, BrowserAction } from "./types.js";
+
+const redisConnection = createRedisConnection(appConfig.redisUrl);
+const queue = createAutomationQueue(redisConnection);
+
+const app = Fastify({
+  logger: false,
+  genReqId: () => randomUUID(),
+  trustProxy: true,
+});
+
+app.addHook("onRequest", async (request, reply) => {
+  reply.header("x-request-id", request.id);
+});
+
+app.setErrorHandler((error, request, reply) => {
+  const requestId = request.id;
+  if (error instanceof AppError) {
+    return sendError(reply, error.statusCode, error.code, error.message, requestId);
+  }
+
+  logger.error({ err: error, requestId }, "Unhandled API error.");
+  return sendError(
+    reply,
+    500,
+    "INTERNAL_SERVER_ERROR",
+    "Unexpected error while processing request.",
+    requestId,
+  );
+});
+
+app.get("/healthz", async () => {
+  const redisStatus = redisConnection.status;
+  return {
+    status: "ok",
+    service: "orchestrator-api",
+    env: appConfig.env,
+    redis: redisStatus,
+    timestamp: new Date().toISOString(),
+  };
+});
+
+app.get("/", async () => {
+  return {
+    service: "orchestrator-api",
+    message: "API running. Use /healthz and /api/v1/jobs.",
+    endpoints: {
+      health: "/healthz",
+      queueJob: "POST /api/v1/jobs (Authorization: Bearer <INTERNAL_API_TOKEN>)",
+      getJob: "GET /api/v1/jobs/:jobId (Authorization: Bearer <INTERNAL_API_TOKEN>)",
+      telegramWebhook: "POST /telegram/webhook",
+    },
+  };
+});
+
+app.post("/api/v1/jobs", async (request, reply) => {
+  requireInternalApiToken(request);
+  const parsed = createJobSchema.safeParse(request.body);
+  if (!parsed.success) {
+    return sendError(
+      reply,
+      400,
+      "INVALID_REQUEST_BODY",
+      parsed.error.flatten().formErrors.join("; ") || "Invalid request body.",
+      request.id,
+    );
+  }
+
+  const payload: AutomationJobPayload = parsed.data;
+  const job = await queue.add("browser-job", payload, {
+    attempts: 1,
+    removeOnComplete: 100,
+    removeOnFail: 100,
+  });
+
+  logger.info(
+    {
+      requestId: request.id,
+      jobId: job.id,
+      jobName: payload.jobName,
+      startUrl: payload.startUrl,
+    },
+    "Queued browser automation job.",
+  );
+
+  if (appConfig.telegram.enabled && payload.chatId && appConfig.telegram.botToken) {
+    await sendTelegramMessage(
+      appConfig.telegram.botToken,
+      payload.chatId,
+      `Job queued: ${payload.jobName}\njobId=${job.id}`,
+    );
+  }
+
+  return reply.code(202).send({
+    jobId: job.id,
+    requestId: request.id,
+    status: "queued",
+  });
+});
+
+app.get("/api/v1/jobs/:jobId", async (request, reply) => {
+  requireInternalApiToken(request);
+
+  const params = request.params as { jobId?: string };
+  if (!params.jobId) {
+    return sendError(reply, 400, "MISSING_JOB_ID", "jobId is required.", request.id);
+  }
+
+  const job = await queue.getJob(params.jobId);
+  if (!job) {
+    return sendError(reply, 404, "JOB_NOT_FOUND", "No job found for the provided ID.", request.id);
+  }
+
+  return reply.send({
+    requestId: request.id,
+    jobId: job.id,
+    state: await job.getState(),
+    payload: job.data,
+    result: job.returnvalue,
+    failedReason: job.failedReason,
+    processedOn: job.processedOn,
+    finishedOn: job.finishedOn,
+  });
+});
+
+app.post("/telegram/webhook", async (request, reply) => {
+  if (!appConfig.telegram.enabled) {
+    return sendError(reply, 503, "TELEGRAM_DISABLED", "Telegram integration is disabled.", request.id);
+  }
+
+  const providedSecret = request.headers["x-telegram-bot-api-secret-token"];
+  if (providedSecret !== appConfig.telegram.webhookSecret) {
+    return sendError(reply, 401, "UNAUTHORIZED_WEBHOOK", "Invalid Telegram webhook secret.", request.id);
+  }
+
+  const parsed = telegramUpdateSchema.safeParse(request.body);
+  if (!parsed.success) {
+    return sendError(reply, 400, "INVALID_TELEGRAM_PAYLOAD", "Malformed Telegram update payload.", request.id);
+  }
+
+  const message = parsed.data.message;
+  if (!message?.text || !appConfig.telegram.botToken) {
+    return reply.send({ ok: true });
+  }
+
+  const chatId = message.chat.id;
+  if (
+    appConfig.telegram.allowedChatIds.length > 0 &&
+    !appConfig.telegram.allowedChatIds.includes(chatId)
+  ) {
+    await sendTelegramMessage(
+      appConfig.telegram.botToken,
+      chatId,
+      "This chat is not authorized for this bot.",
+    );
+    return reply.send({ ok: true });
+  }
+
+  const responseText = await handleTelegramCommand(chatId, message.text);
+  if (responseText) {
+    await sendTelegramMessage(appConfig.telegram.botToken, chatId, responseText);
+  }
+
+  return reply.send({ ok: true });
+});
+
+const handleTelegramCommand = async (
+  chatId: number,
+  commandText: string,
+): Promise<string> => {
+  const trimmed = commandText.trim();
+
+  if (trimmed === "/start" || trimmed === "/help") {
+    return [
+      "Ghostclaw bot ready.",
+      "Commands:",
+      "/health",
+      "/run <url>",
+      "/job <jobId>",
+    ].join("\n");
+  }
+
+  if (trimmed === "/health") {
+    return `API healthy. env=${appConfig.env} redis=${redisConnection.status}`;
+  }
+
+  if (trimmed.startsWith("/run ")) {
+    const rawUrl = trimmed.replace("/run", "").trim();
+    let parsedUrl: URL;
+    try {
+      parsedUrl = new URL(rawUrl);
+    } catch {
+      return "Invalid URL. Usage: /run https://example.com";
+    }
+
+    const defaultActions: BrowserAction[] = [
+      {
+        type: "wait_for_timeout",
+        timeoutMs: 1500,
+      },
+      {
+        type: "screenshot",
+        label: "landing",
+        fullPage: true,
+      },
+    ];
+
+    const payload: AutomationJobPayload = {
+      jobName: `telegram-run-${Date.now()}`,
+      startUrl: parsedUrl.toString(),
+      actions: defaultActions,
+      visionPrompt:
+        "Summarize the visible page state, identify forms/modals, and propose next operator actions.",
+      chatId,
+    };
+
+    const job = await queue.add("telegram-browser-job", payload, {
+      attempts: 1,
+      removeOnComplete: 100,
+      removeOnFail: 100,
+    });
+    return `Job queued.\njobId=${job.id}\nurl=${payload.startUrl}`;
+  }
+
+  if (trimmed.startsWith("/job ")) {
+    const jobId = trimmed.replace("/job", "").trim();
+    if (!jobId) {
+      return "Usage: /job <jobId>";
+    }
+    const job = await queue.getJob(jobId);
+    if (!job) {
+      return `No job found for id=${jobId}`;
+    }
+    const state = await job.getState();
+    const summary =
+      typeof job.returnvalue === "object" && job.returnvalue !== null
+        ? JSON.stringify(job.returnvalue)
+        : "No result yet.";
+    return `jobId=${jobId}\nstate=${state}\nresult=${summary.slice(0, 1200)}`;
+  }
+
+  return "Unknown command. Use /help.";
+};
+
+const requireInternalApiToken = (request: FastifyRequest): void => {
+  if (!appConfig.internalApiToken) {
+    return;
+  }
+
+  const authHeader = request.headers.authorization;
+  if (authHeader !== `Bearer ${appConfig.internalApiToken}`) {
+    throw new AppError("UNAUTHORIZED", "Missing or invalid Authorization header.", 401);
+  }
+};
+
+const sendError = (
+  reply: FastifyReply,
+  statusCode: number,
+  code: string,
+  message: string,
+  requestId: string,
+): FastifyReply => {
+  const errorBody: ApiErrorBody = {
+    error: {
+      code,
+      message,
+      requestId,
+    },
+  };
+  return reply.code(statusCode).send(errorBody);
+};
+
+const start = async (): Promise<void> => {
+  try {
+    await app.listen({
+      host: appConfig.host,
+      port: appConfig.port,
+    });
+    logger.info(
+      {
+        host: appConfig.host,
+        port: appConfig.port,
+        env: appConfig.env,
+      },
+      "Orchestrator API started.",
+    );
+  } catch (error) {
+    logger.error({ err: error }, "Failed to start orchestrator API.");
+    process.exit(1);
+  }
+};
+
+const shutdown = async (): Promise<void> => {
+  logger.info("Shutting down orchestrator API.");
+  await app.close();
+  await queue.close();
+  await redisConnection.quit();
+};
+
+process.on("SIGINT", () => {
+  void shutdown().finally(() => process.exit(0));
+});
+
+process.on("SIGTERM", () => {
+  void shutdown().finally(() => process.exit(0));
+});
+
+void start();

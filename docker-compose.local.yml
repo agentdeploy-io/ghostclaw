@@ -1,0 +1,17 @@
+services:
+  caddy:
+    ports:
+      - "${LOCAL_HTTP_PORT:-8080}:80"
+      - "${LOCAL_HTTPS_PORT:-8443}:443"
+
+  ironclaw:
+    ports:
+      - "${IRONCLAW_HOST_PORT:-8081}:8080"
+
+  cloudflared:
+    image: cloudflare/cloudflared:2024.12.2
+    restart: unless-stopped
+    command: ["tunnel", "--no-autoupdate", "--url", "http://caddy:80"]
+    depends_on:
+      caddy:
+        condition: service_started

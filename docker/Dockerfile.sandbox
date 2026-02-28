@@ -1,0 +1,17 @@
+FROM node:20-bookworm-slim
+
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends \
+    bash \
+    ca-certificates \
+    curl \
+    git \
+    openssh-client \
+    ripgrep \
+    tini \
+  && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /workspace
+
+ENTRYPOINT ["/usr/bin/tini", "--"]
+CMD ["sleep", "infinity"]
