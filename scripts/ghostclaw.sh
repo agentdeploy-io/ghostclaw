@@ -4,6 +4,44 @@ set -Eeuo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 ENV_FILE="$REPO_ROOT/.env"
+LOG_DIR="$REPO_ROOT/data/logs"
+mkdir -p "$LOG_DIR"
+LOG_FILE="$LOG_DIR/ghostclaw-$(date -u +%Y%m%dT%H%M%SZ).log"
+exec > >(tee -a "$LOG_FILE") 2>&1
+
+log() {
+  local level="$1"
+  local message="$2"
+  printf '%s [%s] %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$level" "$message"
+}
+
+run_with_timeout() {
+  local seconds="$1"
+  shift
+
+  if command -v gtimeout >/dev/null 2>&1; then
+    gtimeout "$seconds" "$@"
+    return
+  fi
+
+  if command -v timeout >/dev/null 2>&1; then
+    timeout "$seconds" "$@"
+    return
+  fi
+
+  "$@"
+}
+
+on_error() {
+  local line="$1"
+  local rc="$2"
+  local cmd="$3"
+  log "ERROR" "line=$line rc=$rc cmd=$cmd"
+  log "ERROR" "full log: $LOG_FILE"
+  exit "$rc"
+}
+
+trap 'on_error "$LINENO" "$?" "$BASH_COMMAND"' ERR
 
 compose_local() {
   docker compose --env-file "$ENV_FILE" \
@@ -33,8 +71,10 @@ upsert_env_var() {
   local value="$2"
 
   if has_env_key "$key"; then
-    awk -F= -v k="$key" -v v="$value" 'BEGIN{OFS="="} $1==k {$0=k"="v} {print}' "$ENV_FILE" > "$ENV_FILE.tmp"
-    mv "$ENV_FILE.tmp" "$ENV_FILE"
+    local tmp_file
+    tmp_file="$(mktemp "$REPO_ROOT/.env.tmp.XXXXXX")"
+    awk -F= -v k="$key" -v v="$value" 'BEGIN{OFS="="} $1==k {$0=k"="v} {print}' "$ENV_FILE" > "$tmp_file"
+    mv "$tmp_file" "$ENV_FILE"
   else
     printf '%s=%s\n' "$key" "$value" >> "$ENV_FILE"
   fi
@@ -299,8 +339,10 @@ ensure_pgvector() {
 }
 
 ensure_ironclaw_home_writable() {
-  compose_local run --rm --user root --entrypoint bash ironclaw -lc \
-    'mkdir -p /home/ironclaw/.ironclaw && chown -R 1001:1001 /home/ironclaw/.ironclaw' >/dev/null
+  log "INFO" "preflight: fixing /home/ironclaw/.ironclaw ownership"
+  run_with_timeout 300 compose_local run --rm --no-deps --user root --entrypoint bash ironclaw -lc \
+    'mkdir -p /home/ironclaw/.ironclaw && chown -R 1001:1001 /home/ironclaw/.ironclaw'
+  log "INFO" "preflight: ownership check completed"
 }
 
 api_base_url() {
@@ -673,29 +715,43 @@ USAGE
 
 main() {
   local cmd="${1:-}"
+  log "INFO" "command=${cmd:-help} log_file=$LOG_FILE"
+
   case "$cmd" in
     init)
       require_cmd docker
+      log "INFO" "step=ensure_env_file"
       ensure_env_file
       ;;
 
     onboard)
       require_cmd docker
+      log "INFO" "step=ensure_env_file"
       ensure_env_file
+      log "INFO" "step=validate_env"
       validate_env
+      log "INFO" "step=ensure_ironclaw_home_writable"
       ensure_ironclaw_home_writable
+      log "INFO" "step=compose_up_for_onboard"
       compose_local up -d camoufox-tool
+      log "INFO" "step=run_onboard_wizard"
       compose_local run --rm ironclaw onboard
       ;;
 
     up)
       require_cmd docker
+      log "INFO" "step=ensure_env_file"
       ensure_env_file
+      log "INFO" "step=validate_env"
       validate_env
+      log "INFO" "step=ensure_ironclaw_home_writable"
       ensure_ironclaw_home_writable
+      log "INFO" "step=compose_up"
       compose_local up -d
+      log "INFO" "step=smoke_local"
       smoke_local
       if telegram_configured; then
+        log "INFO" "step=set_telegram_webhook"
         if ! (set_telegram_webhook "local"); then
           echo "[up] warning: telegram webhook setup failed; continuing"
         fi
@@ -709,12 +765,14 @@ main() {
 
     down)
       require_cmd docker
+      log "INFO" "step=ensure_env_file"
       ensure_env_file
       compose_local down
       ;;
 
     health)
       require_cmd docker
+      log "INFO" "step=ensure_env_file"
       ensure_env_file
       echo "[health] compose services"
       compose_local ps
@@ -727,6 +785,7 @@ main() {
 
     logs)
       require_cmd docker
+      log "INFO" "step=ensure_env_file"
       ensure_env_file
       local service="${2:-}"
       if [[ -n "$service" ]]; then
@@ -738,31 +797,41 @@ main() {
 
     shell)
       require_cmd docker
+      log "INFO" "step=ensure_env_file"
       ensure_env_file
       compose_local exec agent-sandbox bash
       ;;
+
     webhook:set)
       require_cmd docker
+      log "INFO" "step=ensure_env_file"
       ensure_env_file
+      log "INFO" "step=validate_env"
       validate_env
+      log "INFO" "step=validate_telegram_env"
       validate_telegram_env
+      log "INFO" "step=set_telegram_webhook"
       set_telegram_webhook "local"
       ;;
 
     smoke)
       require_cmd docker
+      log "INFO" "step=ensure_env_file"
       ensure_env_file
       smoke_local
       ;;
 
     deploy:vps)
       require_cmd docker
+      log "INFO" "step=ensure_env_file"
       ensure_env_file
+      log "INFO" "step=validate_env"
       validate_env
       deploy_vps_release
       ;;
 
     rollback:vps)
+      log "INFO" "step=ensure_env_file"
       ensure_env_file
       rollback_vps_release
       ;;
