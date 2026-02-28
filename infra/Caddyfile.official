@@ -5,7 +5,16 @@
 # Domain block for VPS TLS certificates
 {$DOMAIN:localhost} {
   encode gzip zstd
-  reverse_proxy ironclaw:8080
+
+  # Telegram/webhook traffic uses the dedicated HTTP channel port.
+  handle /webhook/* {
+    reverse_proxy ironclaw:8090
+  }
+
+  # Web UI + gateway API traffic.
+  handle {
+    reverse_proxy ironclaw:8080
+  }
 
   header {
     X-Content-Type-Options "nosniff"
@@ -18,7 +27,14 @@
 # Fallback HTTP block for local/tunnel traffic
 :80 {
   encode gzip zstd
-  reverse_proxy ironclaw:8080
+
+  handle /webhook/* {
+    reverse_proxy ironclaw:8090
+  }
+
+  handle {
+    reverse_proxy ironclaw:8080
+  }
 
   header {
     X-Content-Type-Options "nosniff"

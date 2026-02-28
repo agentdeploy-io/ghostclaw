@@ -1,5 +1,4 @@
 # Ghostclaw Runbook (Official IronClaw + Camoufox)
-
 This repo is operated through one script only:
 
 ```bash
@@ -67,6 +66,7 @@ Expected output markers:
 ./scripts/ghostclaw.sh init
 ./scripts/ghostclaw.sh onboard
 ./scripts/ghostclaw.sh up
+./scripts/ghostclaw.sh restart
 ./scripts/ghostclaw.sh down
 ./scripts/ghostclaw.sh health
 ./scripts/ghostclaw.sh logs
@@ -82,7 +82,8 @@ Expected output markers:
 
 Local mode:
 - `up` starts `cloudflared`
-- if `TELEGRAM_BOT_TOKEN` is configured, webhook URL is parsed from tunnel logs and `setWebhook` is called
+- if `TELEGRAM_BOT_TOKEN` is configured, webhook URL is parsed from tunnel logs and `setWebhook` is called against `/webhook/telegram`
+- Caddy routes `/webhook/*` to IronClaw HTTP channel on port `8090`, while UI/API stays on gateway port `8080`
 - if token is missing/placeholder, stack still starts and webhook step is skipped
 
 Manual local reset:
@@ -167,14 +168,31 @@ Inspect tunnel logs:
 docker compose --env-file .env -f docker-compose.yml -f docker-compose.local.yml logs cloudflared
 ```
 
+### Gateway restart instability
+
+Cause:
+- gateway and webhook HTTP server can conflict if both bind `8080`.
+
+Fix in this repo:
+- gateway is pinned to `8080`
+- webhook HTTP channel is pinned to `8090`
+- Caddy forwards `/webhook/*` to `8090` and all other traffic to `8080`
+
+If startup loops still happen after a crash, cycle the full stack so dependencies rebind cleanly:
+
+```bash
+./scripts/ghostclaw.sh down
+./scripts/ghostclaw.sh up
+```
+
 ### Port conflicts
 
-`init` auto-selects free ports for:
-- `LOCAL_HTTP_PORT`
-- `LOCAL_HTTPS_PORT`
-- `IRONCLAW_HOST_PORT`
+Ports are fixed for deterministic behavior:
+- `LOCAL_HTTP_PORT=8080`
+- `LOCAL_HTTPS_PORT=8443`
+- `IRONCLAW_HOST_PORT=8082`
 
-Override in `.env` if needed.
+If one of these is already occupied by another process, free that port and rerun `./scripts/ghostclaw.sh up`.
 
 ### Slow builds
 

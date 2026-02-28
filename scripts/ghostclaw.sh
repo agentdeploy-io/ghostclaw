@@ -112,42 +112,6 @@ generate_secret_if_missing() {
   fi
 }
 
-is_port_in_use() {
-  local port="$1"
-  if ! command -v lsof >/dev/null 2>&1; then
-    return 1
-  fi
-  lsof -nP -iTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1
-}
-
-choose_unique_port() {
-  local start_port="$1"
-  shift
-  local candidate="$start_port"
-
-  while true; do
-    local conflict=false
-    if is_port_in_use "$candidate"; then
-      conflict=true
-    fi
-
-    local existing
-    for existing in "$@"; do
-      if [[ -n "$existing" && "$existing" == "$candidate" ]]; then
-        conflict=true
-        break
-      fi
-    done
-
-    if [[ "$conflict" == "false" ]]; then
-      echo "$candidate"
-      return
-    fi
-
-    candidate=$((candidate + 1))
-  done
-}
-
 prompt_required_if_missing() {
   local key="$1"
   local prompt="$2"
@@ -202,7 +166,7 @@ ensure_env_file() {
   set_env_var_if_missing "TELEGRAM_BOT_TOKEN" "replace_with_telegram_bot_token"
   set_env_var_if_missing "TELEGRAM_WEBHOOK_SECRET" "$(openssl rand -hex 32)"
   set_env_var_if_missing "SECRETS_MASTER_KEY" "$(openssl rand -hex 32)"
-  set_env_var_if_missing "TELEGRAM_WEBHOOK_PATH" "/telegram/webhook"
+  set_env_var_if_missing "TELEGRAM_WEBHOOK_PATH" "/webhook/telegram"
 
   set_env_var_if_missing "BROWSER_CHALLENGE_KEYWORDS" "captcha,verify you are human,security check,mfa,one-time code,unusual traffic,access denied"
   set_env_var_if_missing "CAMOUFOX_HEADLESS" "true"
@@ -221,28 +185,11 @@ ensure_env_file() {
   generate_secret_if_missing "GATEWAY_AUTH_TOKEN" 32
   generate_secret_if_missing "TELEGRAM_WEBHOOK_SECRET" 32
   generate_secret_if_missing "SECRETS_MASTER_KEY" 32
-  local local_http
-  local local_https
-  local ironclaw_host
-
-  local_http="$(read_env_var LOCAL_HTTP_PORT)"
-  local_https="$(read_env_var LOCAL_HTTPS_PORT)"
-  ironclaw_host="$(read_env_var IRONCLAW_HOST_PORT)"
-
-  if is_placeholder_or_empty "$local_http"; then
-    local_http="$(choose_unique_port 8080)"
-    upsert_env_var "LOCAL_HTTP_PORT" "$local_http"
-  fi
-
-  if is_placeholder_or_empty "$local_https"; then
-    local_https="$(choose_unique_port 8443 "$local_http")"
-    upsert_env_var "LOCAL_HTTPS_PORT" "$local_https"
-  fi
-
-  if is_placeholder_or_empty "$ironclaw_host"; then
-    ironclaw_host="$(choose_unique_port 8081 "$local_http" "$local_https")"
-    upsert_env_var "IRONCLAW_HOST_PORT" "$ironclaw_host"
-  fi
+  # Fixed ports by default for deterministic local/VPS behavior.
+  upsert_env_var "LOCAL_HTTP_PORT" "8080"
+  upsert_env_var "LOCAL_HTTPS_PORT" "8443"
+  upsert_env_var "IRONCLAW_HOST_PORT" "8082"
+  upsert_env_var "TELEGRAM_WEBHOOK_PATH" "/webhook/telegram"
 
   local database_url
   database_url="postgresql://$(read_env_var POSTGRES_USER):$(read_env_var POSTGRES_PASSWORD)@postgres:5432/$(read_env_var POSTGRES_DB)"
@@ -349,7 +296,7 @@ api_base_url() {
   local host_port
   host_port="$(read_env_var IRONCLAW_HOST_PORT)"
   if [[ -z "$host_port" ]]; then
-    host_port="8081"
+    host_port="8082"
   fi
   echo "http://localhost:${host_port}"
 }
@@ -411,7 +358,7 @@ set_telegram_webhook() {
   webhook_path="$(read_env_var TELEGRAM_WEBHOOK_PATH)"
 
   if [[ -z "$webhook_path" ]]; then
-    webhook_path="/telegram/webhook"
+    webhook_path="/webhook/telegram"
   fi
 
   local base_url
@@ -702,6 +649,7 @@ Commands:
   init               Generate or repair .env using secure defaults
   onboard            Run official `ironclaw onboard` inside container
   up                 Start local stack (Telegram webhook auto-configures when TELEGRAM_BOT_TOKEN is configured)
+  restart            Full local restart (down + up + smoke)
   down               Stop local stack
   health             Show local service and endpoint health
   logs [service]     Tail logs for all services or a single service
@@ -759,6 +707,33 @@ main() {
         echo "[up] telegram not configured, skipping webhook setup"
       fi
       echo "[up] done"
+      echo "IronClaw URL: $(api_base_url)"
+      echo "Proxy URL: http://localhost:$(read_env_var LOCAL_HTTP_PORT)"
+      ;;
+
+    restart)
+      require_cmd docker
+      log "INFO" "step=ensure_env_file"
+      ensure_env_file
+      log "INFO" "step=validate_env"
+      validate_env
+      log "INFO" "step=compose_down"
+      compose_local down
+      log "INFO" "step=ensure_ironclaw_home_writable"
+      ensure_ironclaw_home_writable
+      log "INFO" "step=compose_up"
+      compose_local up -d
+      log "INFO" "step=smoke_local"
+      smoke_local
+      if telegram_configured; then
+        log "INFO" "step=set_telegram_webhook"
+        if ! (set_telegram_webhook "local"); then
+          echo "[restart] warning: telegram webhook setup failed; continuing"
+        fi
+      else
+        echo "[restart] telegram not configured, skipping webhook setup"
+      fi
+      echo "[restart] done"
       echo "IronClaw URL: $(api_base_url)"
       echo "Proxy URL: http://localhost:$(read_env_var LOCAL_HTTP_PORT)"
       ;;

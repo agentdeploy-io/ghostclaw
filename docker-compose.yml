@@ -60,6 +60,9 @@ services:
       GATEWAY_ENABLED: "true"
       GATEWAY_HOST: 0.0.0.0
       GATEWAY_PORT: "8080"
+      HTTP_HOST: 0.0.0.0
+      HTTP_PORT: "8090"
+      HTTP_WEBHOOK_SECRET: ${TELEGRAM_WEBHOOK_SECRET}
     depends_on:
       postgres:
         condition: service_healthy
