@@ -37,6 +37,25 @@ services:
       timeout: 5s
       retries: 12
 
+  camoufox-mcp:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.camoufox-mcp
+    restart: unless-stopped
+    environment:
+      CAMOUFOX_MCP_PORT: 8790
+      CAMOUFOX_TOOL_BASE_URL: http://camoufox-tool:8788
+    depends_on:
+      camoufox-tool:
+        condition: service_healthy
+    expose:
+      - "8790"
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:8790/healthz').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))\""]
+      interval: 20s
+      timeout: 5s
+      retries: 12
+
   ironclaw:
     build:
       context: .
@@ -67,6 +86,8 @@ services:
       postgres:
         condition: service_healthy
       camoufox-tool:
+        condition: service_healthy
+      camoufox-mcp:
         condition: service_healthy
     volumes:
       - ironclaw_home:/home/ironclaw/.ironclaw

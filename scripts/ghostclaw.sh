@@ -323,6 +323,33 @@ check_camoufox_tool() {
   fi
 }
 
+check_camoufox_mcp() {
+  if ! compose_local exec -T camoufox-mcp node -e "fetch('http://127.0.0.1:8790/healthz').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))" >/dev/null 2>&1; then
+    echo "ERROR: camoufox-mcp health check failed" >&2
+    exit 1
+  fi
+}
+
+camoufox_mcp_registered() {
+  local list_output
+  list_output="$(compose_local run --rm --no-deps ironclaw mcp list 2>/dev/null || true)"
+  if echo "$list_output" | grep -Eq "(^|[[:space:]])camoufox([[:space:]]|$)"; then
+    return 0
+  fi
+  return 1
+}
+
+ensure_camoufox_mcp_registered() {
+  if camoufox_mcp_registered; then
+    echo "[mcp] camoufox MCP already registered"
+    return 1
+  fi
+
+  compose_local run --rm --no-deps ironclaw mcp add camoufox http://camoufox-mcp:8790 --description "Camoufox browser automation bridge" >/dev/null
+  echo "[mcp] registered camoufox MCP server"
+  return 0
+}
+
 discover_local_tunnel_url() {
   if [[ -n "${LOCAL_TUNNEL_URL:-}" ]]; then
     echo "$LOCAL_TUNNEL_URL"
@@ -419,6 +446,7 @@ smoke_local() {
   ensure_pgvector
   wait_for_ironclaw
   check_camoufox_tool
+  check_camoufox_mcp
 
   if ! compose_local ps cloudflared | grep -q "Up"; then
     echo "ERROR: cloudflared is not running" >&2
@@ -493,6 +521,7 @@ deploy_vps_release() {
     cd "$REPO_ROOT"
     tar -czf "$archive_path" \
       camoufox-tool \
+      camoufox-mcp \
       docker \
       infra \
       scripts \
@@ -541,6 +570,11 @@ fi
 
 cd "$REMOTE_DIR/releases/$RELEASE_ID"
 $SUDO docker compose --env-file .env -f docker-compose.yml -f docker-compose.vps.yml up -d --build
+
+# Ensure Camoufox MCP tools are registered in official IronClaw tool registry
+$SUDO docker compose --env-file .env -f docker-compose.yml -f docker-compose.vps.yml run --rm --no-deps ironclaw \
+  mcp add camoufox http://camoufox-mcp:8790 --description "Camoufox browser automation bridge" >/dev/null || true
+$SUDO docker compose --env-file .env -f docker-compose.yml -f docker-compose.vps.yml restart ironclaw >/dev/null || true
 
 POSTGRES_USER="$(awk -F= '$1=="POSTGRES_USER" {print $2}' .env | tail -n1)"
 POSTGRES_DB="$(awk -F= '$1=="POSTGRES_DB" {print $2}' .env | tail -n1)"
@@ -681,7 +715,7 @@ main() {
       log "INFO" "step=ensure_ironclaw_home_writable"
       ensure_ironclaw_home_writable
       log "INFO" "step=compose_up_for_onboard"
-      compose_local up -d camoufox-tool
+      compose_local up -d camoufox-tool camoufox-mcp
       log "INFO" "step=run_onboard_wizard"
       compose_local run --rm ironclaw onboard
       ;;
@@ -698,6 +732,16 @@ main() {
       compose_local up -d
       log "INFO" "step=smoke_local"
       smoke_local
+      log "INFO" "step=ensure_camoufox_mcp_registered"
+      local mcp_changed=0
+      if ensure_camoufox_mcp_registered; then
+        mcp_changed=1
+      fi
+      if [[ "$mcp_changed" -eq 1 ]]; then
+        log "INFO" "step=restart_ironclaw_for_mcp"
+        compose_local restart ironclaw
+        wait_for_ironclaw
+      fi
       if telegram_configured; then
         log "INFO" "step=set_telegram_webhook"
         if ! (set_telegram_webhook "local"); then
@@ -725,6 +769,16 @@ main() {
       compose_local up -d
       log "INFO" "step=smoke_local"
       smoke_local
+      log "INFO" "step=ensure_camoufox_mcp_registered"
+      local mcp_changed=0
+      if ensure_camoufox_mcp_registered; then
+        mcp_changed=1
+      fi
+      if [[ "$mcp_changed" -eq 1 ]]; then
+        log "INFO" "step=restart_ironclaw_for_mcp"
+        compose_local restart ironclaw
+        wait_for_ironclaw
+      fi
       if telegram_configured; then
         log "INFO" "step=set_telegram_webhook"
         if ! (set_telegram_webhook "local"); then
@@ -756,6 +810,10 @@ main() {
       echo
       echo "[health] camoufox-tool"
       compose_local exec -T camoufox-tool node -e "fetch('http://127.0.0.1:8788/healthz').then(async r=>{console.log(await r.text()); if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
+      echo "[health] camoufox-mcp"
+      compose_local exec -T camoufox-mcp node -e "fetch('http://127.0.0.1:8790/healthz').then(async r=>{console.log(await r.text()); if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
+      echo "[health] registered MCP servers"
+      compose_local run --rm --no-deps ironclaw mcp list || true
       ;;
 
     logs)

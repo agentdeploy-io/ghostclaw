@@ -12,7 +12,8 @@ Everything else is implementation detail.
 Services in the stack:
 - `postgres` (`pgvector/pgvector:pg16`) for IronClaw state and memory
 - `ironclaw` official runtime built from `IRONCLAW_GIT_URL` + `IRONCLAW_GIT_REF`
-- `camoufox-tool` browser automation service (`browser.goto`, `browser.click`, `browser.fill`, `browser.press`, `browser.click_xy`, `browser.wait_for_selector`, `browser.wait`, `browser.screenshot`)
+- `camoufox-tool` browser automation engine
+- `camoufox-mcp` MCP adapter that registers Camoufox tools into IronClaw tool registry
 - `caddy` reverse proxy
 - `cloudflared` local tunnel for webhook mode
 - `agent-sandbox` interactive container for development shell access
@@ -76,6 +77,19 @@ Expected output markers:
 ./scripts/ghostclaw.sh smoke
 ./scripts/ghostclaw.sh deploy:vps
 ./scripts/ghostclaw.sh rollback:vps
+```
+
+## Camoufox Tools (Auto-Wired)
+
+- `up` and `restart` auto-register MCP server `camoufox -> http://camoufox-mcp:8790`
+- IronClaw loads these tools into the registry with prefix `camoufox_`
+- Expected tool names include `camoufox_browser.session_new`, `camoufox_browser.goto`, `camoufox_browser.click`, `camoufox_browser.fill`, `camoufox_browser.press`, `camoufox_browser.click_xy`, `camoufox_browser.wait_for_selector`, `camoufox_browser.wait`, `camoufox_browser.screenshot`, `camoufox_browser.session_close`
+
+Verify registry wiring:
+
+```bash
+TOKEN="$(grep "^GATEWAY_AUTH_TOKEN=" .env | cut -d= -f2-)"
+curl -sS http://localhost:8082/api/extensions/tools -H "Authorization: Bearer ${TOKEN}"
 ```
 
 ## Telegram Webhook Flow

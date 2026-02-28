@@ -21,5 +21,10 @@ services:
     security_opt:
       - no-new-privileges:true
 
+  camoufox-mcp:
+    restart: always
+    security_opt:
+      - no-new-privileges:true
+
   agent-sandbox:
     restart: always
