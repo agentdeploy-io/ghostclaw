@@ -49,6 +49,13 @@ compose_local() {
     -f "$REPO_ROOT/docker-compose.local.yml" "$@"
 }
 
+BUILDABLE_SERVICES=(
+  "ironclaw"
+  "camoufox-tool"
+  "camoufox-mcp"
+  "agent-sandbox"
+)
+
 require_cmd() {
   if ! command -v "$1" >/dev/null 2>&1; then
     echo "ERROR: missing required command: $1" >&2
@@ -227,6 +234,83 @@ validate_env() {
       exit 1
     fi
   done
+}
+
+validate_ironclaw_build_env() {
+  local key
+  for key in IRONCLAW_GIT_URL IRONCLAW_GIT_REF; do
+    local value
+    value="$(read_env_var "$key")"
+    if is_placeholder_or_empty "$value"; then
+      echo "ERROR: required env var missing or placeholder for ironclaw build: $key" >&2
+      exit 1
+    fi
+  done
+}
+
+is_buildable_service() {
+  local candidate="$1"
+  local svc
+  for svc in "${BUILDABLE_SERVICES[@]}"; do
+    if [[ "$svc" == "$candidate" ]]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+build_images() {
+  local target="${1:-all}"
+  shift || true
+
+  local no_cache="false"
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --no-cache)
+        no_cache="true"
+        ;;
+      *)
+        echo "ERROR: unknown build option: $1" >&2
+        echo "Usage: ./scripts/ghostclaw.sh build [all|service] [--no-cache]" >&2
+        exit 1
+        ;;
+    esac
+    shift
+  done
+
+  local -a targets
+  if [[ -z "$target" || "$target" == "all" ]]; then
+    targets=("${BUILDABLE_SERVICES[@]}")
+  else
+    if ! is_buildable_service "$target"; then
+      echo "ERROR: unknown build target: $target" >&2
+      echo "Buildable services: ${BUILDABLE_SERVICES[*]}" >&2
+      exit 1
+    fi
+    targets=("$target")
+  fi
+
+  local svc
+  for svc in "${targets[@]}"; do
+    if [[ "$svc" == "ironclaw" ]]; then
+      validate_ironclaw_build_env
+      break
+    fi
+  done
+
+  local -a build_cmd
+  build_cmd=(build)
+  if [[ "$no_cache" == "true" ]]; then
+    build_cmd+=(--no-cache)
+  fi
+  build_cmd+=("${targets[@]}")
+
+  echo "[build] building: ${targets[*]}"
+  if [[ "$no_cache" == "true" ]]; then
+    echo "[build] cache: disabled"
+  fi
+  compose_local "${build_cmd[@]}"
+  echo "[build] done"
 }
 
 telegram_configured() {
@@ -686,6 +770,7 @@ Usage:
 
 Commands:
   init               Generate or repair .env using secure defaults
+  build [target]     Build images (all or one: ironclaw|camoufox-tool|camoufox-mcp|agent-sandbox)
   onboard            Run official `ironclaw onboard` inside container
   up                 Start local stack (Telegram webhook auto-configures when TELEGRAM_BOT_TOKEN is configured)
   restart            Full local restart (down + up + smoke)
@@ -697,6 +782,11 @@ Commands:
   smoke              Validate local stack readiness
   deploy:vps         Deploy stack to Hostinger VPS
   rollback:vps       Roll back VPS to previous release
+
+Build examples:
+  ./scripts/ghostclaw.sh build
+  ./scripts/ghostclaw.sh build all --no-cache
+  ./scripts/ghostclaw.sh build ironclaw
 USAGE
 }
 
@@ -723,6 +813,13 @@ main() {
       compose_local up -d camoufox-tool camoufox-mcp
       log "INFO" "step=run_onboard_wizard"
       compose_local run --rm ironclaw onboard
+      ;;
+
+    build)
+      require_cmd docker
+      log "INFO" "step=ensure_env_file"
+      ensure_env_file
+      build_images "${2:-all}" "${@:3}"
       ;;
 
     up)

@@ -65,6 +65,9 @@ Expected output markers:
 
 ```bash
 ./scripts/ghostclaw.sh init
+./scripts/ghostclaw.sh build
+./scripts/ghostclaw.sh build camoufox-mcp
+./scripts/ghostclaw.sh build ironclaw --no-cache
 ./scripts/ghostclaw.sh onboard
 ./scripts/ghostclaw.sh up
 ./scripts/ghostclaw.sh restart
