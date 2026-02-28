@@ -345,7 +345,12 @@ ensure_camoufox_mcp_registered() {
     return 1
   fi
 
-  compose_local run --rm --no-deps ironclaw mcp add camoufox http://camoufox-mcp:8790 --description "Camoufox browser automation bridge" >/dev/null
+  if ! compose_local run --rm --no-deps ironclaw mcp add camoufox http://camoufox-mcp:8790 --description "Camoufox browser automation bridge"; then
+    echo "ERROR: failed to register camoufox MCP server" >&2
+    echo "Hint: rebuild ironclaw image so Docker MCP endpoint validation patch is active." >&2
+    exit 1
+  fi
+
   echo "[mcp] registered camoufox MCP server"
   return 0
 }

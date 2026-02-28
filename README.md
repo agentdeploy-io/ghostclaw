@@ -92,6 +92,19 @@ TOKEN="$(grep "^GATEWAY_AUTH_TOKEN=" .env | cut -d= -f2-)"
 curl -sS http://localhost:8082/api/extensions/tools -H "Authorization: Bearer ${TOKEN}"
 ```
 
+If tools are not visible after a plain `docker compose restart`, run:
+
+```bash
+./scripts/ghostclaw.sh restart
+```
+
+If registration fails with HTTPS validation, rebuild ironclaw image once:
+
+```bash
+docker compose --env-file .env -f docker-compose.yml -f docker-compose.local.yml build --no-cache ironclaw
+./scripts/ghostclaw.sh restart
+```
+
 ## Telegram Webhook Flow
 
 Local mode:
