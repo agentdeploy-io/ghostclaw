@@ -207,7 +207,7 @@ PERSONA
   set_env_var_if_missing "MENTOR_CHUTES_CSM_MODEL" "sesame/csm-1b"
   set_env_var_if_missing "MENTOR_CHUTES_KOKORO_MODEL" "hexgrad/Kokoro-82M"
   set_env_var_if_missing "MENTOR_CHUTES_ENABLE_KOKORO_FALLBACK" "true"
-  set_env_var_if_missing "MENTOR_VOICE_SAMPLE_SOURCE_PATH" "./data/mentor/master-voice.wav"
+  set_env_var_if_missing "MENTOR_VOICE_SAMPLE_SOURCE_PATH" "./mentor/master-voice.wav"
   set_env_var_if_missing "MENTOR_VOICE_SAMPLE_PATH" "/data/mentor/master-voice.wav"
   set_env_var_if_missing "MENTOR_VOICE_CONTEXT_PATH" "/data/mentor/voice_context.txt"
   set_env_var_if_missing "MENTOR_VOICE_AUTO_TRANSCRIBE" "true"
@@ -512,9 +512,9 @@ ensure_camoufox_mcp_registered() {
   fi
 
   if ! compose_local run --rm --no-deps ironclaw mcp add camoufox http://camoufox-mcp:8790 --description "Camoufox browser automation bridge"; then
-    echo "ERROR: failed to register camoufox MCP server" >&2
-    echo "Hint: rebuild ironclaw image so Docker MCP endpoint validation patch is active." >&2
-    exit 1
+    echo "[mcp] warning: failed to register camoufox MCP server (continuing startup)" >&2
+    echo "[mcp] hint: rebuild ironclaw image so Docker MCP endpoint validation patch is active." >&2
+    return 2
   fi
 
   echo "[mcp] registered camoufox MCP server"
@@ -544,8 +544,9 @@ ensure_mentor_mcp_registered() {
   fi
 
   if ! compose_local run --rm --no-deps ironclaw mcp add mentor http://mentor-mcp:8791 --description "Mentor persona with memory + voice tools"; then
-    echo "ERROR: failed to register mentor MCP server" >&2
-    exit 1
+    echo "[mcp] warning: failed to register mentor MCP server (continuing startup)" >&2
+    echo "[mcp] hint: run ./scripts/ghostclaw.sh build ironclaw then ./scripts/ghostclaw.sh restart" >&2
+    return 2
   fi
 
   echo "[mcp] registered mentor MCP server"
@@ -580,7 +581,7 @@ set_telegram_bot_commands() {
   fi
 
   if echo "$response" | grep -q '"ok":true'; then
-    echo "[telegram] bot commands configured"
+    echo "[telegram] bot commands configured (open chat and type / to refresh command menu)"
     return 0
   fi
 
@@ -589,24 +590,72 @@ set_telegram_bot_commands() {
   return 1
 }
 
+resolve_mentor_voice_source() {
+  local preferred="${1:-}"
+  if [[ -n "$preferred" ]]; then
+    if [[ "$preferred" == /* ]]; then
+      if [[ -f "$preferred" ]]; then
+        echo "$preferred"
+        return 0
+      fi
+    else
+      local preferred_rel="$REPO_ROOT/${preferred#./}"
+      if [[ -f "$preferred_rel" ]]; then
+        echo "$preferred_rel"
+        return 0
+      fi
+    fi
+  fi
+
+  local configured
+  configured="$(read_env_var MENTOR_VOICE_SAMPLE_SOURCE_PATH)"
+  if [[ -n "$configured" ]]; then
+    if [[ "$configured" == /* ]]; then
+      if [[ -f "$configured" ]]; then
+        echo "$configured"
+        return 0
+      fi
+    else
+      local configured_rel="$REPO_ROOT/${configured#./}"
+      if [[ -f "$configured_rel" ]]; then
+        echo "$configured_rel"
+        return 0
+      fi
+    fi
+  fi
+
+  local -a candidates=(
+    "$REPO_ROOT/mentor/master-voice.wav"
+    "$REPO_ROOT/data/mentor/master-voice.wav"
+    "$REPO_ROOT/mentor/master-voice.mp3"
+    "$REPO_ROOT/data/mentor/master-voice.mp3"
+    "$REPO_ROOT/mentor/master-voice.m4a"
+    "$REPO_ROOT/data/mentor/master-voice.m4a"
+    "$REPO_ROOT/mentor/master-voice.mp4"
+    "$REPO_ROOT/data/mentor/master-voice.mp4"
+  )
+
+  local candidate
+  for candidate in "${candidates[@]}"; do
+    if [[ -f "$candidate" ]]; then
+      echo "$candidate"
+      return 0
+    fi
+  done
+
+  return 1
+}
+
 sync_mentor_voice_sample() {
   local sample_source_input="${1:-}"
-  local sample_source="$sample_source_input"
-  if [[ -z "$sample_source" ]]; then
-    sample_source="$(read_env_var MENTOR_VOICE_SAMPLE_SOURCE_PATH)"
-  fi
+  local sample_source
+  sample_source="$(resolve_mentor_voice_source "$sample_source_input" || true)"
 
   if [[ -z "$sample_source" ]]; then
-    echo "ERROR: MENTOR_VOICE_SAMPLE_SOURCE_PATH is empty." >&2
-    exit 1
-  fi
-
-  if [[ "$sample_source" != /* ]]; then
-    sample_source="$REPO_ROOT/${sample_source#./}"
-  fi
-
-  if [[ ! -f "$sample_source" ]]; then
-    echo "ERROR: mentor voice sample file not found: $sample_source" >&2
+    echo "ERROR: mentor voice sample file not found. Expected one of:" >&2
+    echo "  ./mentor/master-voice.wav" >&2
+    echo "  ./data/mentor/master-voice.wav" >&2
+    echo "Or pass a path: ./scripts/ghostclaw.sh up /abs/path/master-voice.wav" >&2
     exit 1
   fi
 
@@ -1157,7 +1206,7 @@ main() {
           echo "[up] warning: telegram command registration failed; continuing"
         fi
       else
-        echo "[up] telegram not configured, skipping webhook setup"
+        echo "[up] telegram not configured in .env (TELEGRAM_BOT_TOKEN), skipping webhook/commands"
       fi
       echo "[up] done"
       echo "IronClaw URL: $(api_base_url)"
@@ -1207,7 +1256,7 @@ main() {
           echo "[restart] warning: telegram command registration failed; continuing"
         fi
       else
-        echo "[restart] telegram not configured, skipping webhook setup"
+        echo "[restart] telegram not configured in .env (TELEGRAM_BOT_TOKEN), skipping webhook/commands"
       fi
       echo "[restart] done"
       echo "IronClaw URL: $(api_base_url)"

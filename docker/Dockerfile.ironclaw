@@ -23,10 +23,10 @@ RUN git checkout "$IRONCLAW_GIT_REF"
 RUN perl -0777 -i -pe 's#libsql\s*=\s*\{\s*version\s*=\s*"0\.6"\s*,\s*optional\s*=\s*true\s*,\s*default-features\s*=\s*false\s*,\s*features\s*=\s*\[[^\]]*\]\s*\}#libsql = { version = "0.6", optional = true, default-features = false, features = ["core", "replication", "remote", "tls"] }#smg' Cargo.toml \
   && grep -n 'libsql' Cargo.toml
 
-# Allow internal Docker MCP endpoint for camoufox bridge.
-RUN perl -0777 -i -pe 's#url_lower\.contains\("localhost"\)\s*\|\|\s*url_lower\.contains\("127\.0\.0\.1"\)#url_lower.contains("localhost") || url_lower.contains("127.0.0.1") || url_lower.contains("camoufox-mcp")#g' src/tools/mcp/config.rs \
-  && perl -0777 -i -pe 's#d\.eq_ignore_ascii_case\("localhost"\)#d.eq_ignore_ascii_case("localhost") || d.eq_ignore_ascii_case("camoufox-mcp")#g' src/tools/mcp/config.rs \
-  && grep -n 'camoufox-mcp' src/tools/mcp/config.rs
+# Allow internal Docker MCP endpoints for local bridge services.
+RUN perl -0777 -i -pe 's#url_lower\.contains\("localhost"\)\s*\|\|\s*url_lower\.contains\("127\.0\.0\.1"\)#url_lower.contains("localhost") || url_lower.contains("127.0.0.1") || url_lower.contains("camoufox-mcp") || url_lower.contains("mentor-mcp")#g' src/tools/mcp/config.rs \
+  && perl -0777 -i -pe 's#d\.eq_ignore_ascii_case\("localhost"\)#d.eq_ignore_ascii_case("localhost") || d.eq_ignore_ascii_case("camoufox-mcp") || d.eq_ignore_ascii_case("mentor-mcp")#g' src/tools/mcp/config.rs \
+  && grep -n 'camoufox-mcp\|mentor-mcp' src/tools/mcp/config.rs
 
 ENV CARGO_NET_RETRY=20 \
     CARGO_HTTP_TIMEOUT=600 \
