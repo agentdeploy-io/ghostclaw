@@ -735,7 +735,7 @@ app.post("/bootstrap/voice", async (request, reply) => {
   }
 });
 
-app.post("/mcp", async (request, reply) => {
+const handleMcpRequest = async (request, reply) => {
   const body = request.body;
   if (!body || typeof body !== "object") {
     return reply.code(400).send(jsonRpcError(null, -32600, "Invalid Request"));
@@ -812,7 +812,11 @@ app.post("/mcp", async (request, reply) => {
       }),
     );
   }
-});
+};
+
+// Accept both legacy root MCP path and explicit /mcp path.
+app.post("/", handleMcpRequest);
+app.post("/mcp", handleMcpRequest);
 
 app.listen({ host: "0.0.0.0", port }).then(() => {
   app.log.info(

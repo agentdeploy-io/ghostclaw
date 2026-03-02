@@ -90,13 +90,14 @@ Expected output markers:
 
 ## Camoufox Tools (Auto-Wired)
 
-- `up` and `restart` auto-register MCP server `camoufox -> http://camoufox-mcp:8790`
+- `up` and `restart` auto-register MCP server `camoufox -> http://camoufox-mcp:8790/mcp`
+- Registration only creates missing entries and preserves the enabled/disabled state set in IronClaw UI
 - IronClaw loads these tools into the registry with prefix `camoufox_`
 - Expected tool names include `camoufox_browser.session_new`, `camoufox_browser.goto`, `camoufox_browser.click`, `camoufox_browser.fill`, `camoufox_browser.press`, `camoufox_browser.click_xy`, `camoufox_browser.wait_for_selector`, `camoufox_browser.wait`, `camoufox_browser.screenshot`, `camoufox_browser.session_close`
 
 ## Mentor Tools + Voice (Auto-Wired)
 
-- `up` and `restart` auto-register MCP server `mentor -> http://mentor-mcp:8791`
+- `up` and `restart` auto-register MCP server `mentor -> http://mentor-mcp:8791/mcp`
 - Mentor tools exposed to IronClaw:
   - `mentor.chat`
   - `mentor.speak`

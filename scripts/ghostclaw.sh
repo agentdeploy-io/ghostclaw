@@ -211,6 +211,8 @@ PERSONA
   set_env_var_if_missing "MENTOR_VOICE_SAMPLE_PATH" "/data/mentor/master-voice.wav"
   set_env_var_if_missing "MENTOR_VOICE_CONTEXT_PATH" "/data/mentor/voice_context.txt"
   set_env_var_if_missing "MENTOR_VOICE_AUTO_TRANSCRIBE" "true"
+  set_env_var_if_missing "MCP_CAMOUFOX_DEFAULT_ENABLED" "true"
+  set_env_var_if_missing "MCP_MENTOR_DEFAULT_ENABLED" "true"
 
   set_env_var_if_missing "TELEGRAM_BOT_TOKEN" "replace_with_telegram_bot_token"
   set_env_var_if_missing "TELEGRAM_WEBHOOK_SECRET" "$(openssl rand -hex 32)"
@@ -505,16 +507,34 @@ camoufox_mcp_registered() {
   return 1
 }
 
+mcp_default_enabled() {
+  local key="$1"
+  local value
+  value="$(read_env_var "$key")"
+  if [[ "$value" == "false" ]]; then
+    return 1
+  fi
+  return 0
+}
+
 ensure_camoufox_mcp_registered() {
   if camoufox_mcp_registered; then
     echo "[mcp] camoufox MCP already registered"
     return 1
   fi
 
-  if ! compose_local run --rm --no-deps ironclaw mcp add camoufox http://camoufox-mcp:8790 --description "Camoufox browser automation bridge"; then
+  if ! compose_local run --rm --no-deps ironclaw mcp add camoufox http://camoufox-mcp:8790/mcp --description "Camoufox browser automation bridge"; then
     echo "[mcp] warning: failed to register camoufox MCP server (continuing startup)" >&2
     echo "[mcp] hint: rebuild ironclaw image so Docker MCP endpoint validation patch is active." >&2
     return 2
+  fi
+
+  if ! mcp_default_enabled "MCP_CAMOUFOX_DEFAULT_ENABLED"; then
+    if compose_local run --rm --no-deps ironclaw mcp toggle camoufox --disable >/dev/null 2>&1; then
+      echo "[mcp] camoufox MCP defaulted to disabled (MCP_CAMOUFOX_DEFAULT_ENABLED=false)"
+    else
+      echo "[mcp] warning: camoufox MCP added but could not be default-disabled" >&2
+    fi
   fi
 
   echo "[mcp] registered camoufox MCP server"
@@ -543,10 +563,18 @@ ensure_mentor_mcp_registered() {
     return 1
   fi
 
-  if ! compose_local run --rm --no-deps ironclaw mcp add mentor http://mentor-mcp:8791 --description "Mentor persona with memory + voice tools"; then
+  if ! compose_local run --rm --no-deps ironclaw mcp add mentor http://mentor-mcp:8791/mcp --description "Mentor persona with memory + voice tools"; then
     echo "[mcp] warning: failed to register mentor MCP server (continuing startup)" >&2
     echo "[mcp] hint: run ./scripts/ghostclaw.sh build ironclaw then ./scripts/ghostclaw.sh restart" >&2
     return 2
+  fi
+
+  if ! mcp_default_enabled "MCP_MENTOR_DEFAULT_ENABLED"; then
+    if compose_local run --rm --no-deps ironclaw mcp toggle mentor --disable >/dev/null 2>&1; then
+      echo "[mcp] mentor MCP defaulted to disabled (MCP_MENTOR_DEFAULT_ENABLED=false)"
+    else
+      echo "[mcp] warning: mentor MCP added but could not be default-disabled" >&2
+    fi
   fi
 
   echo "[mcp] registered mentor MCP server"
@@ -995,9 +1023,9 @@ $SUDO docker compose --env-file .env -f docker-compose.yml -f docker-compose.vps
 
 # Ensure MCP tools are registered in official IronClaw tool registry
 $SUDO docker compose --env-file .env -f docker-compose.yml -f docker-compose.vps.yml run --rm --no-deps ironclaw \
-  mcp add camoufox http://camoufox-mcp:8790 --description "Camoufox browser automation bridge" >/dev/null || true
+  mcp add camoufox http://camoufox-mcp:8790/mcp --description "Camoufox browser automation bridge" >/dev/null || true
 $SUDO docker compose --env-file .env -f docker-compose.yml -f docker-compose.vps.yml run --rm --no-deps ironclaw \
-  mcp add mentor http://mentor-mcp:8791 --description "Mentor persona with memory + voice tools" >/dev/null || true
+  mcp add mentor http://mentor-mcp:8791/mcp --description "Mentor persona with memory + voice tools" >/dev/null || true
 $SUDO docker compose --env-file .env -f docker-compose.yml -f docker-compose.vps.yml restart ironclaw >/dev/null || true
 
 POSTGRES_USER="$(awk -F= '$1=="POSTGRES_USER" {print $2}' .env | tail -n1)"

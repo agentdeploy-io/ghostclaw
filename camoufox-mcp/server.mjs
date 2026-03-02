@@ -417,7 +417,7 @@ app.get("/healthz", async () => ({
   timestamp: new Date().toISOString()
 }));
 
-app.post("/", async (request, reply) => {
+const handleMcpRequest = async (request, reply) => {
   const body = request.body;
   if (!body || typeof body !== "object") {
     return reply.code(400).send(jsonRpcError(0, -32600, "Invalid Request"));
@@ -473,7 +473,11 @@ app.post("/", async (request, reply) => {
     default:
       return reply.send(jsonRpcError(id, -32601, `Method not found: ${method}`));
   }
-});
+};
+
+// Support both legacy root MCP path and explicit /mcp path.
+app.post("/", handleMcpRequest);
+app.post("/mcp", handleMcpRequest);
 
 app.listen({ host: "0.0.0.0", port })
   .then(() => {
