@@ -207,8 +207,8 @@ PERSONA
   set_env_var_if_missing "MENTOR_CHUTES_CSM_MODEL" "sesame/csm-1b"
   set_env_var_if_missing "MENTOR_CHUTES_KOKORO_MODEL" "hexgrad/Kokoro-82M"
   set_env_var_if_missing "MENTOR_CHUTES_ENABLE_KOKORO_FALLBACK" "true"
-  set_env_var_if_missing "MENTOR_VOICE_SAMPLE_SOURCE_PATH" "./data/mentor/voice_sample.mp3"
-  set_env_var_if_missing "MENTOR_VOICE_SAMPLE_PATH" "/data/mentor/voice_sample.mp3"
+  set_env_var_if_missing "MENTOR_VOICE_SAMPLE_SOURCE_PATH" "./data/mentor/master-voice.wav"
+  set_env_var_if_missing "MENTOR_VOICE_SAMPLE_PATH" "/data/mentor/master-voice.wav"
   set_env_var_if_missing "MENTOR_VOICE_CONTEXT_PATH" "/data/mentor/voice_context.txt"
   set_env_var_if_missing "MENTOR_VOICE_AUTO_TRANSCRIBE" "true"
 
@@ -618,14 +618,14 @@ sync_mentor_voice_sample() {
     *) ext="mp3" ;;
   esac
 
-  local target_rel="./data/mentor/voice_sample.${ext}"
+  local target_rel="./data/mentor/master-voice.${ext}"
   local target_sample="$REPO_ROOT/${target_rel#./}"
   if [[ "$sample_source" != "$target_sample" ]]; then
     cp "$sample_source" "$target_sample"
   fi
 
   upsert_env_var "MENTOR_VOICE_SAMPLE_SOURCE_PATH" "$target_rel"
-  upsert_env_var "MENTOR_VOICE_SAMPLE_PATH" "/data/mentor/voice_sample.${ext}"
+  upsert_env_var "MENTOR_VOICE_SAMPLE_PATH" "/data/mentor/master-voice.${ext}"
   echo "[mentor] sample synced: $target_sample"
 }
 
@@ -1079,8 +1079,8 @@ Build examples:
 
 Run examples:
   ./scripts/ghostclaw.sh up
-  ./scripts/ghostclaw.sh up /absolute/path/voice_sample.mp3
-  ./scripts/ghostclaw.sh restart /absolute/path/voice_sample.mp3
+  ./scripts/ghostclaw.sh up /absolute/path/master-voice.wav
+  ./scripts/ghostclaw.sh restart /absolute/path/master-voice.wav
 USAGE
 }
 

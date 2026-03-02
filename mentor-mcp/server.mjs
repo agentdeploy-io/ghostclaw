@@ -54,7 +54,7 @@ const mentorKokoroModel =
 const mentorEnableKokoroFallback =
   (process.env.MENTOR_CHUTES_ENABLE_KOKORO_FALLBACK || "true") === "true";
 const mentorVoiceSamplePath =
-  process.env.MENTOR_VOICE_SAMPLE_PATH || "/data/mentor/voice_sample.mp3";
+  process.env.MENTOR_VOICE_SAMPLE_PATH || "/data/mentor/master-voice.wav";
 const mentorVoiceContextPath =
   process.env.MENTOR_VOICE_CONTEXT_PATH || "/data/mentor/voice_context.txt";
 const mentorVoiceAutoTranscribe =

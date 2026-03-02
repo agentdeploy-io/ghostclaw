@@ -53,7 +53,7 @@ cd "/Users/mac/Documents/ironclaw"
 ./scripts/ghostclaw.sh init
 ./scripts/ghostclaw.sh onboard
 ./scripts/ghostclaw.sh up
-./scripts/ghostclaw.sh up /absolute/path/to/voice_sample.mp3
+./scripts/ghostclaw.sh up /absolute/path/to/master-voice.wav
 ./scripts/ghostclaw.sh health
 ```
 
@@ -81,8 +81,8 @@ Expected output markers:
 ./scripts/ghostclaw.sh shell
 ./scripts/ghostclaw.sh webhook:set
 ./scripts/ghostclaw.sh telegram:commands
-./scripts/ghostclaw.sh mentor:clone ./data/mentor/voice_sample.mp3
-./scripts/ghostclaw.sh up /absolute/path/to/voice_sample.mp3
+./scripts/ghostclaw.sh mentor:clone ./data/mentor/master-voice.wav
+./scripts/ghostclaw.sh up /absolute/path/to/master-voice.wav
 ./scripts/ghostclaw.sh smoke
 ./scripts/ghostclaw.sh deploy:vps
 ./scripts/ghostclaw.sh rollback:vps
@@ -107,9 +107,9 @@ Expected output markers:
 - Mentor persona source is `./mentor/persona.md`
 
 Voice processing flow (Chutes):
-1. Place your reference media at `./data/mentor/voice_sample.mp3` (mp4/wav also supported).
+1. Place your reference media at `./data/mentor/master-voice.wav` (mp4/wav also supported).
 2. Set `MENTOR_VOICE_API_KEY` in `.env` (defaults to `MAIN_LLM_API_KEY` if omitted).
-3. Run `./scripts/ghostclaw.sh mentor:clone ./data/mentor/voice_sample.mp3` to sync sample and bootstrap transcript context.
+3. Run `./scripts/ghostclaw.sh mentor:clone ./data/mentor/master-voice.wav` to sync sample and bootstrap transcript context.
 4. On `up`/`restart`, auto-bootstrap runs when `MENTOR_AUTO_BOOTSTRAP_VOICE=true` and context file is missing.
 5. Runtime pipeline is:
    - STT: `MENTOR_CHUTES_WHISPER_MODEL` (default `openai/whisper-large-v3-turbo`)
@@ -237,13 +237,13 @@ docker compose --env-file .env -f docker-compose.yml -f docker-compose.local.yml
 
 Check:
 - `MENTOR_VOICE_API_KEY` is set and valid
-- sample file exists at `MENTOR_VOICE_SAMPLE_SOURCE_PATH` (default `./data/mentor/voice_sample.mp3`)
+- sample file exists at `MENTOR_VOICE_SAMPLE_SOURCE_PATH` (default `./data/mentor/master-voice.wav`)
 - Chutes run endpoint is valid (`MENTOR_CHUTES_RUN_ENDPOINT`, default `https://llm.chutes.ai/v1/run`)
 
 Manual bootstrap command:
 
 ```bash
-./scripts/ghostclaw.sh mentor:clone ./data/mentor/voice_sample.mp3
+./scripts/ghostclaw.sh mentor:clone ./data/mentor/master-voice.wav
 ```
 
 After success, verify `./data/mentor/voice_context.txt` is present and non-empty.
