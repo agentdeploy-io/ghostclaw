@@ -53,6 +53,7 @@ BUILDABLE_SERVICES=(
   "ironclaw"
   "camoufox-tool"
   "camoufox-mcp"
+  "mentor-mcp"
   "agent-sandbox"
 )
 
@@ -155,6 +156,25 @@ ensure_env_file() {
     touch "$ENV_FILE"
   fi
 
+  mkdir -p "$REPO_ROOT/data/mentor"
+  mkdir -p "$REPO_ROOT/mentor"
+
+  if [[ ! -f "$REPO_ROOT/mentor/persona.md" ]]; then
+    cat > "$REPO_ROOT/mentor/persona.md" <<'PERSONA'
+You are Ghostclaw Mentor.
+
+Operating style:
+- Be direct, calm, and execution-focused.
+- Prioritize the next 1-3 commands/actions over long theory.
+- If risk is high, state the risk and safe fallback.
+- Keep answers concise but technically complete.
+
+Scope:
+- Help users operate and debug IronClaw + Camoufox production stacks.
+- Default to practical runbook guidance.
+PERSONA
+  fi
+
   set_env_var_if_missing "IRONCLAW_GIT_URL" "replace_with_official_ironclaw_git_url"
   set_env_var_if_missing "IRONCLAW_GIT_REF" "replace_with_git_tag_or_commit"
   set_env_var_if_missing "POSTGRES_DB" "ironclaw"
@@ -169,6 +189,28 @@ ensure_env_file() {
   set_env_var_if_missing "SUB_LLM_BASE_URL" "https://llm.chutes.ai/v1"
   set_env_var_if_missing "SUB_LLM_MODEL" "MiniMaxAI/MiniMax-M2.5-TEE"
   set_env_var_if_missing "SUB_LLM_API_KEY" "replace_with_sub_llm_api_key_or_same_as_main"
+
+  set_env_var_if_missing "MENTOR_NAME" "Ghostclaw Mentor"
+  set_env_var_if_missing "MENTOR_PERSONA_FILE" "/mentor/persona.md"
+  set_env_var_if_missing "MENTOR_MEMORY_FILE" "/data/mentor/memory.json"
+  set_env_var_if_missing "MENTOR_MEMORY_WINDOW" "14"
+  set_env_var_if_missing "MENTOR_LLM_BASE_URL" "https://llm.chutes.ai/v1"
+  set_env_var_if_missing "MENTOR_LLM_MODEL" "MiniMaxAI/MiniMax-M2.5-TEE"
+  set_env_var_if_missing "MENTOR_LLM_API_KEY" "replace_with_mentor_llm_api_key_or_same_as_sub"
+  set_env_var_if_missing "ENABLE_MENTOR_VOICE" "true"
+  set_env_var_if_missing "MENTOR_AUTO_BOOTSTRAP_VOICE" "true"
+  set_env_var_if_missing "MENTOR_VOICE_API_BASE_URL" "https://llm.chutes.ai/v1"
+  set_env_var_if_missing "MENTOR_VOICE_API_KEY" "replace_with_mentor_voice_api_key_or_same_as_main"
+  set_env_var_if_missing "MENTOR_CHUTES_VOICE_MODE" "run_api"
+  set_env_var_if_missing "MENTOR_CHUTES_RUN_ENDPOINT" "https://llm.chutes.ai/v1/run"
+  set_env_var_if_missing "MENTOR_CHUTES_WHISPER_MODEL" "openai/whisper-large-v3-turbo"
+  set_env_var_if_missing "MENTOR_CHUTES_CSM_MODEL" "sesame/csm-1b"
+  set_env_var_if_missing "MENTOR_CHUTES_KOKORO_MODEL" "hexgrad/Kokoro-82M"
+  set_env_var_if_missing "MENTOR_CHUTES_ENABLE_KOKORO_FALLBACK" "true"
+  set_env_var_if_missing "MENTOR_VOICE_SAMPLE_SOURCE_PATH" "./data/mentor/voice_sample.mp3"
+  set_env_var_if_missing "MENTOR_VOICE_SAMPLE_PATH" "/data/mentor/voice_sample.mp3"
+  set_env_var_if_missing "MENTOR_VOICE_CONTEXT_PATH" "/data/mentor/voice_context.txt"
+  set_env_var_if_missing "MENTOR_VOICE_AUTO_TRANSCRIBE" "true"
 
   set_env_var_if_missing "TELEGRAM_BOT_TOKEN" "replace_with_telegram_bot_token"
   set_env_var_if_missing "TELEGRAM_WEBHOOK_SECRET" "$(openssl rand -hex 32)"
@@ -186,6 +228,46 @@ ensure_env_file() {
   set_env_var_if_missing "VPS_USER" "root"
   set_env_var_if_missing "VPS_SSH_KEY" ""
   set_env_var_if_missing "VPS_REMOTE_DIR" "/opt/ghostclaw"
+
+  local mentor_llm_api_key
+  mentor_llm_api_key="$(read_env_var MENTOR_LLM_API_KEY)"
+  if is_placeholder_or_empty "$mentor_llm_api_key"; then
+    local sub_llm_api_key
+    sub_llm_api_key="$(read_env_var SUB_LLM_API_KEY)"
+    if ! is_placeholder_or_empty "$sub_llm_api_key"; then
+      upsert_env_var "MENTOR_LLM_API_KEY" "$sub_llm_api_key"
+    fi
+  fi
+
+  local mentor_llm_base
+  mentor_llm_base="$(read_env_var MENTOR_LLM_BASE_URL)"
+  if is_placeholder_or_empty "$mentor_llm_base"; then
+    local sub_llm_base
+    sub_llm_base="$(read_env_var SUB_LLM_BASE_URL)"
+    if ! is_placeholder_or_empty "$sub_llm_base"; then
+      upsert_env_var "MENTOR_LLM_BASE_URL" "$sub_llm_base"
+    fi
+  fi
+
+  local mentor_llm_model
+  mentor_llm_model="$(read_env_var MENTOR_LLM_MODEL)"
+  if is_placeholder_or_empty "$mentor_llm_model"; then
+    local sub_llm_model
+    sub_llm_model="$(read_env_var SUB_LLM_MODEL)"
+    if ! is_placeholder_or_empty "$sub_llm_model"; then
+      upsert_env_var "MENTOR_LLM_MODEL" "$sub_llm_model"
+    fi
+  fi
+
+  local mentor_voice_api_key
+  mentor_voice_api_key="$(read_env_var MENTOR_VOICE_API_KEY)"
+  if is_placeholder_or_empty "$mentor_voice_api_key"; then
+    local main_llm_api_key
+    main_llm_api_key="$(read_env_var MAIN_LLM_API_KEY)"
+    if ! is_placeholder_or_empty "$main_llm_api_key"; then
+      upsert_env_var "MENTOR_VOICE_API_KEY" "$main_llm_api_key"
+    fi
+  fi
 
   generate_secret_if_missing "POSTGRES_PASSWORD" 32
   generate_secret_if_missing "INTERNAL_API_TOKEN" 48
@@ -439,6 +521,205 @@ ensure_camoufox_mcp_registered() {
   return 0
 }
 
+check_mentor_mcp() {
+  if ! compose_local exec -T mentor-mcp node -e "fetch('http://127.0.0.1:8791/healthz').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))" >/dev/null 2>&1; then
+    echo "ERROR: mentor-mcp health check failed" >&2
+    exit 1
+  fi
+}
+
+mentor_mcp_registered() {
+  local list_output
+  list_output="$(compose_local run --rm --no-deps ironclaw mcp list 2>/dev/null || true)"
+  if echo "$list_output" | grep -Eq "(^|[[:space:]])mentor([[:space:]]|$)"; then
+    return 0
+  fi
+  return 1
+}
+
+ensure_mentor_mcp_registered() {
+  if mentor_mcp_registered; then
+    echo "[mcp] mentor MCP already registered"
+    return 1
+  fi
+
+  if ! compose_local run --rm --no-deps ironclaw mcp add mentor http://mentor-mcp:8791 --description "Mentor persona with memory + voice tools"; then
+    echo "ERROR: failed to register mentor MCP server" >&2
+    exit 1
+  fi
+
+  echo "[mcp] registered mentor MCP server"
+  return 0
+}
+
+set_telegram_bot_commands() {
+  if ! telegram_configured; then
+    echo "[telegram] token not configured, skipping setMyCommands"
+    return 0
+  fi
+
+  local bot_token
+  bot_token="$(read_env_var TELEGRAM_BOT_TOKEN)"
+  local payload
+  payload='{"commands":[{"command":"help","description":"Show command list"},{"command":"mentor","description":"Chat with mentor"},{"command":"mentor_voice","description":"Mentor reply with voice"},{"command":"run","description":"Queue browser run"},{"command":"job","description":"Check job status"}]}'
+
+  local response_file
+  response_file="$(mktemp)"
+
+  local http_code
+  http_code=$(curl -sS --connect-timeout 10 --max-time 20 -o "$response_file" -w "%{http_code}" -X POST "https://api.telegram.org/bot${bot_token}/setMyCommands"     -H "Content-Type: application/json"     -d "$payload" || true)
+
+  local response
+  response="$(cat "$response_file" 2>/dev/null || true)"
+  rm -f "$response_file"
+
+  if [[ "$http_code" != "200" ]]; then
+    echo "[telegram] warning: setMyCommands HTTP $http_code" >&2
+    echo "$response" >&2
+    return 1
+  fi
+
+  if echo "$response" | grep -q '"ok":true'; then
+    echo "[telegram] bot commands configured"
+    return 0
+  fi
+
+  echo "[telegram] warning: setMyCommands returned non-ok response" >&2
+  echo "$response" >&2
+  return 1
+}
+
+sync_mentor_voice_sample() {
+  local sample_source_input="${1:-}"
+  local sample_source="$sample_source_input"
+  if [[ -z "$sample_source" ]]; then
+    sample_source="$(read_env_var MENTOR_VOICE_SAMPLE_SOURCE_PATH)"
+  fi
+
+  if [[ -z "$sample_source" ]]; then
+    echo "ERROR: MENTOR_VOICE_SAMPLE_SOURCE_PATH is empty." >&2
+    exit 1
+  fi
+
+  if [[ "$sample_source" != /* ]]; then
+    sample_source="$REPO_ROOT/${sample_source#./}"
+  fi
+
+  if [[ ! -f "$sample_source" ]]; then
+    echo "ERROR: mentor voice sample file not found: $sample_source" >&2
+    exit 1
+  fi
+
+  local ext
+  ext="${sample_source##*.}"
+  ext="${ext,,}"
+  case "$ext" in
+    mp3|mp4|m4a|wav|ogg|webm) ;;
+    *) ext="mp3" ;;
+  esac
+
+  local target_rel="./data/mentor/voice_sample.${ext}"
+  local target_sample="$REPO_ROOT/${target_rel#./}"
+  if [[ "$sample_source" != "$target_sample" ]]; then
+    cp "$sample_source" "$target_sample"
+  fi
+
+  upsert_env_var "MENTOR_VOICE_SAMPLE_SOURCE_PATH" "$target_rel"
+  upsert_env_var "MENTOR_VOICE_SAMPLE_PATH" "/data/mentor/voice_sample.${ext}"
+  echo "[mentor] sample synced: $target_sample"
+}
+
+bootstrap_mentor_voice_context() {
+  local sample_source_input="${1:-}"
+
+  sync_mentor_voice_sample "$sample_source_input"
+
+  local mentor_voice_api_key
+  mentor_voice_api_key="$(read_env_var MENTOR_VOICE_API_KEY)"
+  if is_placeholder_or_empty "$mentor_voice_api_key"; then
+    echo "ERROR: MENTOR_VOICE_API_KEY is missing or placeholder." >&2
+    exit 1
+  fi
+
+  compose_local up -d mentor-mcp
+  check_mentor_mcp
+
+  echo "[mentor] bootstrapping voice context via whisper..."
+  compose_local exec -T mentor-mcp node -e "fetch('http://127.0.0.1:8791/bootstrap/voice',{method:'POST'}).then(async r=>{const t=await r.text();console.log(t);process.exit(r.ok?0:1)}).catch(e=>{console.error(e);process.exit(1)})"
+
+  local context_env
+  context_env="$(read_env_var MENTOR_VOICE_CONTEXT_PATH)"
+  local context_file="$REPO_ROOT/data/mentor/voice_context.txt"
+  if [[ "$context_env" == /data/mentor/* ]]; then
+    context_file="$REPO_ROOT/data/mentor/${context_env##*/}"
+  elif [[ -n "$context_env" && "$context_env" == /* ]]; then
+    context_file="$context_env"
+  elif [[ -n "$context_env" ]]; then
+    context_file="$REPO_ROOT/${context_env#./}"
+  fi
+
+  if [[ ! -s "$context_file" ]]; then
+    echo "ERROR: mentor voice context file was not generated: $context_file" >&2
+    exit 1
+  fi
+
+  echo "[mentor] voice context ready: $context_file"
+}
+
+auto_bootstrap_mentor_voice_if_enabled() {
+  local enabled
+  enabled="$(read_env_var MENTOR_AUTO_BOOTSTRAP_VOICE)"
+  if [[ "$enabled" != "true" ]]; then
+    return 0
+  fi
+
+  local voice_enabled
+  voice_enabled="$(read_env_var ENABLE_MENTOR_VOICE)"
+  if [[ "$voice_enabled" != "true" ]]; then
+    return 0
+  fi
+
+  local context_env
+  context_env="$(read_env_var MENTOR_VOICE_CONTEXT_PATH)"
+  local context_file="$REPO_ROOT/data/mentor/voice_context.txt"
+  if [[ "$context_env" == /data/mentor/* ]]; then
+    context_file="$REPO_ROOT/data/mentor/${context_env##*/}"
+  elif [[ -n "$context_env" && "$context_env" == /* ]]; then
+    context_file="$context_env"
+  elif [[ -n "$context_env" ]]; then
+    context_file="$REPO_ROOT/${context_env#./}"
+  fi
+
+  if [[ -s "$context_file" ]]; then
+    echo "[mentor] voice context already present, skipping bootstrap"
+    return 0
+  fi
+
+  local mentor_voice_api_key
+  mentor_voice_api_key="$(read_env_var MENTOR_VOICE_API_KEY)"
+  if is_placeholder_or_empty "$mentor_voice_api_key"; then
+    echo "[mentor] MENTOR_VOICE_API_KEY missing; skipping automatic voice bootstrap"
+    return 0
+  fi
+
+  local sample_source
+  sample_source="$(read_env_var MENTOR_VOICE_SAMPLE_SOURCE_PATH)"
+  if [[ -z "$sample_source" ]]; then
+    echo "[mentor] MENTOR_VOICE_SAMPLE_SOURCE_PATH missing; skipping automatic voice bootstrap"
+    return 0
+  fi
+
+  local resolved_source="$sample_source"
+  if [[ "$resolved_source" != /* ]]; then
+    resolved_source="$REPO_ROOT/${resolved_source#./}"
+  fi
+  if [[ ! -f "$resolved_source" ]]; then
+    echo "[mentor] voice sample not found at $resolved_source; skipping automatic bootstrap"
+    return 0
+  fi
+
+  bootstrap_mentor_voice_context "$resolved_source"
+}
 discover_local_tunnel_url() {
   if [[ -n "${LOCAL_TUNNEL_URL:-}" ]]; then
     echo "$LOCAL_TUNNEL_URL"
@@ -536,6 +817,7 @@ smoke_local() {
   wait_for_ironclaw
   check_camoufox_tool
   check_camoufox_mcp
+  check_mentor_mcp
 
   if ! compose_local ps cloudflared | grep -q "Up"; then
     echo "ERROR: cloudflared is not running" >&2
@@ -611,6 +893,8 @@ deploy_vps_release() {
     tar -czf "$archive_path" \
       camoufox-tool \
       camoufox-mcp \
+      mentor-mcp \
+      mentor \
       docker \
       infra \
       scripts \
@@ -660,9 +944,11 @@ fi
 cd "$REMOTE_DIR/releases/$RELEASE_ID"
 $SUDO docker compose --env-file .env -f docker-compose.yml -f docker-compose.vps.yml up -d --build
 
-# Ensure Camoufox MCP tools are registered in official IronClaw tool registry
+# Ensure MCP tools are registered in official IronClaw tool registry
 $SUDO docker compose --env-file .env -f docker-compose.yml -f docker-compose.vps.yml run --rm --no-deps ironclaw \
   mcp add camoufox http://camoufox-mcp:8790 --description "Camoufox browser automation bridge" >/dev/null || true
+$SUDO docker compose --env-file .env -f docker-compose.yml -f docker-compose.vps.yml run --rm --no-deps ironclaw \
+  mcp add mentor http://mentor-mcp:8791 --description "Mentor persona with memory + voice tools" >/dev/null || true
 $SUDO docker compose --env-file .env -f docker-compose.yml -f docker-compose.vps.yml restart ironclaw >/dev/null || true
 
 POSTGRES_USER="$(awk -F= '$1=="POSTGRES_USER" {print $2}' .env | tail -n1)"
@@ -770,15 +1056,17 @@ Usage:
 
 Commands:
   init               Generate or repair .env using secure defaults
-  build [target]     Build images (all or one: ironclaw|camoufox-tool|camoufox-mcp|agent-sandbox)
+  build [target]     Build images (all or one: ironclaw|camoufox-tool|camoufox-mcp|mentor-mcp|agent-sandbox)
   onboard            Run official `ironclaw onboard` inside container
-  up                 Start local stack (Telegram webhook auto-configures when TELEGRAM_BOT_TOKEN is configured)
-  restart            Full local restart (down + up + smoke)
+  up [voice_sample]  Start local stack (auto webhook + mentor voice bootstrap)
+  restart [sample]   Full local restart (down + up + smoke)
   down               Stop local stack
   health             Show local service and endpoint health
   logs [service]     Tail logs for all services or a single service
   shell              Open interactive shell in agent-sandbox
   webhook:set        Set Telegram webhook for local tunnel (single bot token)
+  telegram:commands  Register Telegram slash commands (/mentor, /mentor_voice, /run, /job)
+  mentor:clone [audio] Sync sample audio and bootstrap Chutes whisper context for CSM voice clone
   smoke              Validate local stack readiness
   deploy:vps         Deploy stack to Hostinger VPS
   rollback:vps       Roll back VPS to previous release
@@ -786,7 +1074,13 @@ Commands:
 Build examples:
   ./scripts/ghostclaw.sh build
   ./scripts/ghostclaw.sh build all --no-cache
+  ./scripts/ghostclaw.sh build mentor-mcp
   ./scripts/ghostclaw.sh build ironclaw
+
+Run examples:
+  ./scripts/ghostclaw.sh up
+  ./scripts/ghostclaw.sh up /absolute/path/voice_sample.mp3
+  ./scripts/ghostclaw.sh restart /absolute/path/voice_sample.mp3
 USAGE
 }
 
@@ -810,7 +1104,7 @@ main() {
       log "INFO" "step=ensure_ironclaw_home_writable"
       ensure_ironclaw_home_writable
       log "INFO" "step=compose_up_for_onboard"
-      compose_local up -d camoufox-tool camoufox-mcp
+      compose_local up -d camoufox-tool camoufox-mcp mentor-mcp
       log "INFO" "step=run_onboard_wizard"
       compose_local run --rm ironclaw onboard
       ;;
@@ -828,15 +1122,24 @@ main() {
       ensure_env_file
       log "INFO" "step=validate_env"
       validate_env
+      if [[ -n "${2:-}" ]]; then
+        log "INFO" "step=sync_mentor_voice_sample"
+        sync_mentor_voice_sample "${2}"
+      fi
       log "INFO" "step=ensure_ironclaw_home_writable"
       ensure_ironclaw_home_writable
+      log "INFO" "step=auto_bootstrap_mentor_voice_if_enabled"
+      auto_bootstrap_mentor_voice_if_enabled
       log "INFO" "step=compose_up"
       compose_local up -d
       log "INFO" "step=smoke_local"
       smoke_local
-      log "INFO" "step=ensure_camoufox_mcp_registered"
+      log "INFO" "step=ensure_mcp_servers_registered"
       local mcp_changed=0
       if ensure_camoufox_mcp_registered; then
+        mcp_changed=1
+      fi
+      if ensure_mentor_mcp_registered; then
         mcp_changed=1
       fi
       if [[ "$mcp_changed" -eq 1 ]]; then
@@ -848,6 +1151,10 @@ main() {
         log "INFO" "step=set_telegram_webhook"
         if ! (set_telegram_webhook "local"); then
           echo "[up] warning: telegram webhook setup failed; continuing"
+        fi
+        log "INFO" "step=set_telegram_bot_commands"
+        if ! (set_telegram_bot_commands); then
+          echo "[up] warning: telegram command registration failed; continuing"
         fi
       else
         echo "[up] telegram not configured, skipping webhook setup"
@@ -863,17 +1170,26 @@ main() {
       ensure_env_file
       log "INFO" "step=validate_env"
       validate_env
+      if [[ -n "${2:-}" ]]; then
+        log "INFO" "step=sync_mentor_voice_sample"
+        sync_mentor_voice_sample "${2}"
+      fi
       log "INFO" "step=compose_down"
       compose_local down
       log "INFO" "step=ensure_ironclaw_home_writable"
       ensure_ironclaw_home_writable
+      log "INFO" "step=auto_bootstrap_mentor_voice_if_enabled"
+      auto_bootstrap_mentor_voice_if_enabled
       log "INFO" "step=compose_up"
       compose_local up -d
       log "INFO" "step=smoke_local"
       smoke_local
-      log "INFO" "step=ensure_camoufox_mcp_registered"
+      log "INFO" "step=ensure_mcp_servers_registered"
       local mcp_changed=0
       if ensure_camoufox_mcp_registered; then
+        mcp_changed=1
+      fi
+      if ensure_mentor_mcp_registered; then
         mcp_changed=1
       fi
       if [[ "$mcp_changed" -eq 1 ]]; then
@@ -885,6 +1201,10 @@ main() {
         log "INFO" "step=set_telegram_webhook"
         if ! (set_telegram_webhook "local"); then
           echo "[restart] warning: telegram webhook setup failed; continuing"
+        fi
+        log "INFO" "step=set_telegram_bot_commands"
+        if ! (set_telegram_bot_commands); then
+          echo "[restart] warning: telegram command registration failed; continuing"
         fi
       else
         echo "[restart] telegram not configured, skipping webhook setup"
@@ -914,6 +1234,8 @@ main() {
       compose_local exec -T camoufox-tool node -e "fetch('http://127.0.0.1:8788/healthz').then(async r=>{console.log(await r.text()); if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
       echo "[health] camoufox-mcp"
       compose_local exec -T camoufox-mcp node -e "fetch('http://127.0.0.1:8790/healthz').then(async r=>{console.log(await r.text()); if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
+      echo "[health] mentor-mcp"
+      compose_local exec -T mentor-mcp node -e "fetch('http://127.0.0.1:8791/healthz').then(async r=>{console.log(await r.text()); if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
       echo "[health] registered MCP servers"
       compose_local run --rm --no-deps ironclaw mcp list || true
       ;;
@@ -947,6 +1269,26 @@ main() {
       validate_telegram_env
       log "INFO" "step=set_telegram_webhook"
       set_telegram_webhook "local"
+      log "INFO" "step=set_telegram_bot_commands"
+      set_telegram_bot_commands
+      ;;
+
+    telegram:commands)
+      require_cmd docker
+      log "INFO" "step=ensure_env_file"
+      ensure_env_file
+      log "INFO" "step=validate_telegram_env"
+      validate_telegram_env
+      log "INFO" "step=set_telegram_bot_commands"
+      set_telegram_bot_commands
+      ;;
+
+    mentor:clone)
+      require_cmd curl
+      log "INFO" "step=ensure_env_file"
+      ensure_env_file
+      log "INFO" "step=bootstrap_mentor_voice_context"
+      bootstrap_mentor_voice_context "${2:-}"
       ;;
 
     smoke)

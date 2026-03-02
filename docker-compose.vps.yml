@@ -26,5 +26,10 @@ services:
     security_opt:
       - no-new-privileges:true
 
+  mentor-mcp:
+    restart: always
+    security_opt:
+      - no-new-privileges:true
+
   agent-sandbox:
     restart: always

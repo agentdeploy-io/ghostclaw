@@ -56,6 +56,45 @@ services:
       timeout: 5s
       retries: 12
 
+  mentor-mcp:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.mentor-mcp
+    restart: unless-stopped
+    environment:
+      MENTOR_MCP_PORT: 8791
+      MENTOR_NAME: ${MENTOR_NAME:-Ghostclaw Mentor}
+      MENTOR_PERSONA_FILE: ${MENTOR_PERSONA_FILE:-/mentor/persona.md}
+      MENTOR_MEMORY_FILE: ${MENTOR_MEMORY_FILE:-/data/mentor/memory.json}
+      MENTOR_MEMORY_WINDOW: ${MENTOR_MEMORY_WINDOW:-14}
+      MENTOR_LLM_BASE_URL: ${MENTOR_LLM_BASE_URL:-https://llm.chutes.ai/v1}
+      MENTOR_LLM_API_KEY: ${MENTOR_LLM_API_KEY:-}
+      MENTOR_LLM_MODEL: ${MENTOR_LLM_MODEL:-MiniMaxAI/MiniMax-M2.5-TEE}
+      ENABLE_MENTOR_VOICE: ${ENABLE_MENTOR_VOICE:-false}
+      MENTOR_VOICE_API_BASE_URL: ${MENTOR_VOICE_API_BASE_URL:-https://llm.chutes.ai/v1}
+      MENTOR_VOICE_API_KEY: ${MENTOR_VOICE_API_KEY:-}
+      MENTOR_CHUTES_VOICE_MODE: ${MENTOR_CHUTES_VOICE_MODE:-run_api}
+      MENTOR_CHUTES_RUN_ENDPOINT: ${MENTOR_CHUTES_RUN_ENDPOINT:-https://llm.chutes.ai/v1/run}
+      MENTOR_CHUTES_WHISPER_MODEL: ${MENTOR_CHUTES_WHISPER_MODEL:-openai/whisper-large-v3-turbo}
+      MENTOR_CHUTES_CSM_MODEL: ${MENTOR_CHUTES_CSM_MODEL:-sesame/csm-1b}
+      MENTOR_CHUTES_KOKORO_MODEL: ${MENTOR_CHUTES_KOKORO_MODEL:-hexgrad/Kokoro-82M}
+      MENTOR_CHUTES_ENABLE_KOKORO_FALLBACK: ${MENTOR_CHUTES_ENABLE_KOKORO_FALLBACK:-true}
+      MENTOR_VOICE_SAMPLE_PATH: ${MENTOR_VOICE_SAMPLE_PATH:-/data/mentor/voice_sample.mp3}
+      MENTOR_VOICE_CONTEXT_PATH: ${MENTOR_VOICE_CONTEXT_PATH:-/data/mentor/voice_context.txt}
+      MENTOR_VOICE_AUTO_TRANSCRIBE: ${MENTOR_VOICE_AUTO_TRANSCRIBE:-true}
+      MENTOR_ARTIFACT_DIR: /data/artifacts/mentor
+    volumes:
+      - ./data/artifacts:/data/artifacts
+      - ./data/mentor:/data/mentor
+      - ./mentor:/mentor:ro
+    expose:
+      - "8791"
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:8791/healthz').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))\""]
+      interval: 20s
+      timeout: 5s
+      retries: 12
+
   ironclaw:
     build:
       context: .
@@ -88,6 +127,8 @@ services:
       camoufox-tool:
         condition: service_healthy
       camoufox-mcp:
+        condition: service_healthy
+      mentor-mcp:
         condition: service_healthy
     volumes:
       - ironclaw_home:/home/ironclaw/.ironclaw

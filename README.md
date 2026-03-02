@@ -13,7 +13,8 @@ Services in the stack:
 - `postgres` (`pgvector/pgvector:pg16`) for IronClaw state and memory
 - `ironclaw` official runtime built from `IRONCLAW_GIT_URL` + `IRONCLAW_GIT_REF`
 - `camoufox-tool` browser automation engine
-- `camoufox-mcp` MCP adapter that registers Camoufox tools into IronClaw tool registry
+- `camoufox-mcp` MCP adapter that registers Camoufox browser tools into IronClaw tool registry
+- `mentor-mcp` MCP adapter that provides Mentor persona chat + voice tools
 - `caddy` reverse proxy
 - `cloudflared` local tunnel for webhook mode
 - `agent-sandbox` interactive container for development shell access
@@ -52,6 +53,7 @@ cd "/Users/mac/Documents/ironclaw"
 ./scripts/ghostclaw.sh init
 ./scripts/ghostclaw.sh onboard
 ./scripts/ghostclaw.sh up
+./scripts/ghostclaw.sh up /absolute/path/to/voice_sample.mp3
 ./scripts/ghostclaw.sh health
 ```
 
@@ -66,6 +68,7 @@ Expected output markers:
 ```bash
 ./scripts/ghostclaw.sh init
 ./scripts/ghostclaw.sh build
+./scripts/ghostclaw.sh build mentor-mcp
 ./scripts/ghostclaw.sh build camoufox-mcp
 ./scripts/ghostclaw.sh build ironclaw --no-cache
 ./scripts/ghostclaw.sh onboard
@@ -77,6 +80,9 @@ Expected output markers:
 ./scripts/ghostclaw.sh logs ironclaw
 ./scripts/ghostclaw.sh shell
 ./scripts/ghostclaw.sh webhook:set
+./scripts/ghostclaw.sh telegram:commands
+./scripts/ghostclaw.sh mentor:clone ./data/mentor/voice_sample.mp3
+./scripts/ghostclaw.sh up /absolute/path/to/voice_sample.mp3
 ./scripts/ghostclaw.sh smoke
 ./scripts/ghostclaw.sh deploy:vps
 ./scripts/ghostclaw.sh rollback:vps
@@ -87,6 +93,34 @@ Expected output markers:
 - `up` and `restart` auto-register MCP server `camoufox -> http://camoufox-mcp:8790`
 - IronClaw loads these tools into the registry with prefix `camoufox_`
 - Expected tool names include `camoufox_browser.session_new`, `camoufox_browser.goto`, `camoufox_browser.click`, `camoufox_browser.fill`, `camoufox_browser.press`, `camoufox_browser.click_xy`, `camoufox_browser.wait_for_selector`, `camoufox_browser.wait`, `camoufox_browser.screenshot`, `camoufox_browser.session_close`
+
+## Mentor Tools + Voice (Auto-Wired)
+
+- `up` and `restart` auto-register MCP server `mentor -> http://mentor-mcp:8791`
+- Mentor tools exposed to IronClaw:
+  - `mentor.chat`
+  - `mentor.speak`
+  - `mentor.transcribe`
+  - `mentor.voice_bootstrap`
+  - `mentor.status`
+- Mentor memory is persisted at `./data/mentor/memory.json`
+- Mentor persona source is `./mentor/persona.md`
+
+Voice processing flow (Chutes):
+1. Place your reference media at `./data/mentor/voice_sample.mp3` (mp4/wav also supported).
+2. Set `MENTOR_VOICE_API_KEY` in `.env` (defaults to `MAIN_LLM_API_KEY` if omitted).
+3. Run `./scripts/ghostclaw.sh mentor:clone ./data/mentor/voice_sample.mp3` to sync sample and bootstrap transcript context.
+4. On `up`/`restart`, auto-bootstrap runs when `MENTOR_AUTO_BOOTSTRAP_VOICE=true` and context file is missing.
+5. Runtime pipeline is:
+   - STT: `MENTOR_CHUTES_WHISPER_MODEL` (default `openai/whisper-large-v3-turbo`)
+   - Voice clone: `MENTOR_CHUTES_CSM_MODEL` (default `sesame/csm-1b`)
+   - Fallback TTS: `MENTOR_CHUTES_KOKORO_MODEL` (default `hexgrad/Kokoro-82M`)
+6. Context transcript is persisted at `./data/mentor/voice_context.txt`.
+
+
+Telegram command setup:
+- `./scripts/ghostclaw.sh telegram:commands` registers `/mentor`, `/mentor_voice`, `/run`, `/job` with Bot API `setMyCommands`.
+- You can also run this via `webhook:set` (it now sets webhook + commands).
 
 Verify registry wiring:
 
@@ -113,6 +147,7 @@ docker compose --env-file .env -f docker-compose.yml -f docker-compose.local.yml
 Local mode:
 - `up` starts `cloudflared`
 - if `TELEGRAM_BOT_TOKEN` is configured, webhook URL is parsed from tunnel logs and `setWebhook` is called against `/webhook/telegram`
+- Telegram slash commands are synced automatically (`/mentor`, `/mentor_voice`, `/run`, `/job`)
 - Caddy routes `/webhook/*` to IronClaw HTTP channel on port `8090`, while UI/API stays on gateway port `8080`
 - if token is missing/placeholder, stack still starts and webhook step is skipped
 
@@ -197,6 +232,22 @@ Inspect tunnel logs:
 ```bash
 docker compose --env-file .env -f docker-compose.yml -f docker-compose.local.yml logs cloudflared
 ```
+
+### Mentor voice bootstrap fails
+
+Check:
+- `MENTOR_VOICE_API_KEY` is set and valid
+- sample file exists at `MENTOR_VOICE_SAMPLE_SOURCE_PATH` (default `./data/mentor/voice_sample.mp3`)
+- Chutes run endpoint is valid (`MENTOR_CHUTES_RUN_ENDPOINT`, default `https://llm.chutes.ai/v1/run`)
+
+Manual bootstrap command:
+
+```bash
+./scripts/ghostclaw.sh mentor:clone ./data/mentor/voice_sample.mp3
+```
+
+After success, verify `./data/mentor/voice_context.txt` is present and non-empty.
+
 
 ### Gateway restart instability
 
