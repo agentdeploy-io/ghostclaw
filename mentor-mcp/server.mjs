@@ -723,6 +723,36 @@ app.get("/healthz", async () => {
   };
 });
 
+// HTTP endpoint for chat (used by Telegram webhook)
+app.post("/chat", async (request, reply) => {
+  try {
+    const result = await handleMentorChat(request.body || {});
+    return reply.send({
+      text: result.reply,
+      voiceArtifactPath: result.voiceArtifact,
+      voiceBackend: result.voiceBackend,
+    });
+  } catch (error) {
+    request.log.error({ err: error }, "mentor chat HTTP endpoint failed");
+    return reply.code(500).send({
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+  }
+});
+
+// HTTP endpoint for transcribe (used by Telegram webhook)
+app.post("/transcribe", async (request, reply) => {
+  try {
+    const result = await handleMentorTranscribe(request.body || {});
+    return reply.send(result);
+  } catch (error) {
+    request.log.error({ err: error }, "mentor transcribe HTTP endpoint failed");
+    return reply.code(500).send({
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+  }
+});
+
 app.post("/bootstrap/voice", async (request, reply) => {
   try {
     const result = await handleMentorVoiceBootstrap();

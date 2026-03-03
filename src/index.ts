@@ -5,13 +5,75 @@ import Fastify, { type FastifyReply, type FastifyRequest } from "fastify";
 import { appConfig } from "./config.js";
 import { AppError } from "./errors.js";
 import { createAutomationQueue, createRedisConnection } from "./lib/queue.js";
-import { sendTelegramMessage } from "./lib/telegram.js";
+import { sendTelegramMessage, sendTelegramVoiceNote, downloadTelegramFile } from "./lib/telegram.js";
 import { sendSlackMessage } from "./lib/slack.js";
 import { sendDiscordMessage } from "./lib/discord.js";
 import { sendWhatsAppMessage, verifyWhatsAppWebhook } from "./lib/whatsapp.js";
 import { logger } from "./logger.js";
 import { createJobSchema, telegramUpdateSchema } from "./schemas.js";
 import type { ApiErrorBody, AutomationJobPayload, BrowserAction } from "./types.js";
+
+// Mentor MCP HTTP client
+const mentorChat = async (message: string, voiceReply = false): Promise<{ text: string; voiceData?: Buffer }> => {
+  const mentorUrl = process.env.MENTOR_MCP_URL || "http://mentor-mcp:8791";
+  
+  const response = await fetch(`${mentorUrl}/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      message,
+      sessionId: "telegram-default",
+      voiceReply,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new AppError(
+      "MENTOR_CHAT_FAILED",
+      `Mentor MCP error (${response.status}): ${errorText.slice(0, 300)}`,
+      502,
+    );
+  }
+
+  const result = await response.json() as { text: string; voiceArtifactPath?: string };
+  
+  if (voiceReply && result.voiceArtifactPath) {
+    // Read the voice file from the artifact path
+    const { readFile } = await import("node:fs/promises");
+    const voiceData = await readFile(result.voiceArtifactPath);
+    return { text: result.text, voiceData };
+  }
+  
+  return { text: result.text };
+};
+
+const mentorTranscribe = async (audioData: Buffer, mimeType = "audio/wav"): Promise<string> => {
+  const mentorUrl = process.env.MENTOR_MCP_URL || "http://mentor-mcp:8791";
+  
+  const base64Audio = audioData.toString("base64");
+  
+  const response = await fetch(`${mentorUrl}/transcribe`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      base64Audio,
+      mimeType,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new AppError(
+      "MENTOR_TRANSCRIBE_FAILED",
+      `Mentor MCP error (${response.status}): ${errorText.slice(0, 300)}`,
+      502,
+    );
+  }
+
+  const result = await response.json() as { text: string };
+  return result.text;
+};
 
 const redisConnection = createRedisConnection(appConfig.redisUrl);
 const queue = createAutomationQueue(redisConnection);
@@ -156,7 +218,7 @@ app.post("/telegram/webhook", async (request, reply) => {
   }
 
   const message = parsed.data.message;
-  if (!message?.text || !appConfig.telegram.botToken) {
+  if (!message || !appConfig.telegram.botToken) {
     return reply.send({ ok: true });
   }
 
@@ -173,7 +235,113 @@ app.post("/telegram/webhook", async (request, reply) => {
     return reply.send({ ok: true });
   }
 
-  const responseText = await handleTelegramCommand(chatId, message.text);
+  // Handle voice notes (STT -> mentor -> TTS response)
+  if (message.voice) {
+    if (!appConfig.mentor.voice.enabled) {
+      await sendTelegramMessage(
+        appConfig.telegram.botToken,
+        chatId,
+        "Voice notes are currently disabled.",
+      );
+      return reply.send({ ok: true });
+    }
+
+    try {
+      // Download the voice file from Telegram
+      const voiceData = await downloadTelegramFile(appConfig.telegram.botToken, message.voice.file_id);
+      
+      // Transcribe the voice note
+      const transcribedText = await mentorTranscribe(voiceData, message.voice.mime_type || "audio/ogg");
+      
+      // Send the transcription as a message first
+      await sendTelegramMessage(
+        appConfig.telegram.botToken,
+        chatId,
+        `🎤 Transcribed: "${transcribedText}"`,
+      );
+      
+      // Get mentor response with voice
+      const mentorResult = await mentorChat(transcribedText, true);
+      
+      // Send mentor's text response
+      await sendTelegramMessage(
+        appConfig.telegram.botToken,
+        chatId,
+        mentorResult.text,
+      );
+      
+      // Send mentor's voice response if available
+      if (mentorResult.voiceData && appConfig.mentor.voice.enabled) {
+        await sendTelegramVoiceNote(
+          appConfig.telegram.botToken,
+          chatId,
+          mentorResult.voiceData,
+        );
+      }
+    } catch (error) {
+      logger.error({ err: error }, "Voice note processing failed");
+      await sendTelegramMessage(
+        appConfig.telegram.botToken,
+        chatId,
+        `Voice processing error: ${error instanceof Error ? error.message : "Unknown error"}`,
+      );
+    }
+    
+    return reply.send({ ok: true });
+  }
+
+  // Handle text messages
+  if (!message.text) {
+    return reply.send({ ok: true });
+  }
+
+  const text = message.text;
+  
+  // Check if this is a /mentor_voice command - handle specially with voice response
+  if (text.startsWith("/mentor_voice ")) {
+    const messageText = text.replace("/mentor_voice", "").trim();
+    if (!messageText) {
+      await sendTelegramMessage(
+        appConfig.telegram.botToken,
+        chatId,
+        "Usage: /mentor_voice <your message>",
+      );
+      return reply.send({ ok: true });
+    }
+    
+    try {
+      const result = await mentorChat(messageText, true);
+      
+      // Send text response
+      await sendTelegramMessage(
+        appConfig.telegram.botToken,
+        chatId,
+        result.text,
+      );
+      
+      // Send voice response if available
+      if (result.voiceData && appConfig.mentor.voice.enabled) {
+        await sendTelegramVoiceNote(
+          appConfig.telegram.botToken,
+          chatId,
+          result.voiceData,
+          "🎤 Mentor voice response",
+        );
+      }
+    } catch (error) {
+      logger.error({ err: error }, "Mentor voice command failed");
+      await sendTelegramMessage(
+        appConfig.telegram.botToken,
+        chatId,
+        `Mentor voice error: ${error instanceof Error ? error.message : "Unknown error"}`,
+      );
+    }
+    
+    return reply.send({ ok: true });
+  }
+
+  // Handle other text commands
+  const responseText = await handleTelegramCommand(chatId, text);
   if (responseText) {
     await sendTelegramMessage(appConfig.telegram.botToken, chatId, responseText);
   }
@@ -344,6 +512,8 @@ const handleTelegramCommand = async (
       "/health",
       "/run <url>",
       "/job <jobId>",
+      "/mentor <message>     - Chat with mentor (text)",
+      "/mentor_voice <msg>   - Chat with mentor (voice reply)",
     ].join("\n");
   }
 
@@ -404,6 +574,42 @@ const handleTelegramCommand = async (
         ? JSON.stringify(job.returnvalue)
         : "No result yet.";
     return `jobId=${jobId}\nstate=${state}\nresult=${summary.slice(0, 1200)}`;
+  }
+
+  // Mentor commands
+  if (trimmed.startsWith("/mentor ")) {
+    const message = trimmed.replace("/mentor", "").trim();
+    if (!message) {
+      return "Usage: /mentor <your message>";
+    }
+    try {
+      const result = await mentorChat(message, false);
+      return result.text;
+    } catch (error) {
+      logger.error({ err: error }, "Mentor chat failed");
+      return `Mentor error: ${error instanceof Error ? error.message : "Unknown error"}`;
+    }
+  }
+
+  if (trimmed.startsWith("/mentor_voice ")) {
+    const message = trimmed.replace("/mentor_voice", "").trim();
+    if (!message) {
+      return "Usage: /mentor_voice <your message>";
+    }
+    // Return a marker that the webhook handler will use to send voice
+    // This is a workaround - we'll handle voice separately in the webhook
+    try {
+      const result = await mentorChat(message, true);
+      if (result.voiceData) {
+        // Store voice data temporarily for webhook to send
+        // For now, send text and note voice is available
+        return `🎤 Voice response ready. Sending voice note...`;
+      }
+      return result.text;
+    } catch (error) {
+      logger.error({ err: error }, "Mentor voice chat failed");
+      return `Mentor voice error: ${error instanceof Error ? error.message : "Unknown error"}`;
+    }
   }
 
   return "Unknown command. Use /help.";
