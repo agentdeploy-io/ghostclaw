@@ -12,9 +12,9 @@ const schema = z
       .enum(["fatal", "error", "warn", "info", "debug", "trace"])
       .default("info"),
     INTERNAL_API_TOKEN: z.string().min(16).optional(),
-    REDIS_URL: z.string().url().default("redis://redis:6379"),
+    REDIS_URL: z.string().url().default("redis://localhost:6379"),
     WORKER_CONCURRENCY: z.coerce.number().int().min(1).max(10).default(2),
-    ARTIFACT_DIR: z.string().default("/data/artifacts"),
+    ARTIFACT_DIR: z.string().default("./data/artifacts"),
     BROWSER_HEADLESS: z.enum(["true", "false"]).default("true"),
     BROWSER_PROVIDER: z.enum(["camoufox", "local"]).default("camoufox"),
     BROWSER_DEFAULT_TIMEOUT_MS: z.coerce
@@ -48,10 +48,53 @@ const schema = z
       .min(1_000)
       .max(120_000)
       .default(120_000),
+    
+    // Telegram integration
     ENABLE_TELEGRAM: z.enum(["true", "false"]).default("false"),
     TELEGRAM_BOT_TOKEN: z.string().optional(),
     TELEGRAM_WEBHOOK_SECRET: z.string().optional(),
     TELEGRAM_ALLOWED_CHAT_IDS: z.string().optional(),
+    
+    // Slack integration
+    ENABLE_SLACK: z.enum(["true", "false"]).default("false"),
+    SLACK_BOT_TOKEN: z.string().optional(),
+    SLACK_SIGNING_SECRET: z.string().optional(),
+    SLACK_APP_TOKEN: z.string().optional(),
+    
+    // Discord integration
+    ENABLE_DISCORD: z.enum(["true", "false"]).default("false"),
+    DISCORD_BOT_TOKEN: z.string().optional(),
+    DISCORD_CLIENT_ID: z.string().optional(),
+    
+    // WhatsApp integration
+    ENABLE_WHATSAPP: z.enum(["true", "false"]).default("false"),
+    WHATSAPP_PHONE_NUMBER_ID: z.string().optional(),
+    WHATSAPP_ACCESS_TOKEN: z.string().optional(),
+    WHATSAPP_VERIFY_TOKEN: z.string().optional(),
+    
+    // Mentor configuration
+    MENTOR_NAME: z.string().default("Lippyclaw Mentor"),
+    MENTOR_PERSONA_FILE: z.string().default("./mentor/persona.md"),
+    MENTOR_MEMORY_FILE: z.string().default("./data/mentor/memory.json"),
+    MENTOR_MEMORY_WINDOW: z.coerce.number().int().min(1).default(14),
+    MENTOR_LLM_BASE_URL: z.string().url().optional(),
+    MENTOR_LLM_MODEL: z.string().optional(),
+    MENTOR_LLM_API_KEY: z.string().optional(),
+    
+    // Mentor voice configuration
+    ENABLE_MENTOR_VOICE: z.enum(["true", "false"]).default("false"),
+    MENTOR_VOICE_API_KEY: z.string().optional(),
+    MENTOR_CHUTES_VOICE_MODE: z.string().default("run_api"),
+    MENTOR_CHUTES_RUN_ENDPOINT: z.string().optional(),
+    MENTOR_CHUTES_WHISPER_MODEL: z.string().default("openai/whisper-large-v3-turbo"),
+    MENTOR_CHUTES_CSM_MODEL: z.string().default("sesame/csm-1b"),
+    MENTOR_CHUTES_KOKORO_MODEL: z.string().default("hexgrad/Kokoro-82M"),
+    MENTOR_CHUTES_ENABLE_KOKORO_FALLBACK: z.enum(["true", "false"]).default("true"),
+    MENTOR_VOICE_SAMPLE_PATH: z.string().default("./mentor/master-voice.wav"),
+    MENTOR_VOICE_CONTEXT_PATH: z.string().default("./data/mentor/voice_context.txt"),
+    MENTOR_VOICE_AUTO_TRANSCRIBE: z.enum(["true", "false"]).default("true"),
+    
+    // Deployment
     DOMAIN: z.string().optional(),
     ACME_EMAIL: z.string().email().optional(),
   })
@@ -89,6 +132,50 @@ const schema = z
           path: ["TELEGRAM_WEBHOOK_SECRET"],
           message:
             "TELEGRAM_WEBHOOK_SECRET is required when ENABLE_TELEGRAM=true",
+        });
+      }
+    }
+
+    if (value.ENABLE_SLACK === "true") {
+      if (!value.SLACK_BOT_TOKEN) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["SLACK_BOT_TOKEN"],
+          message: "SLACK_BOT_TOKEN is required when ENABLE_SLACK=true",
+        });
+      }
+      if (!value.SLACK_SIGNING_SECRET) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["SLACK_SIGNING_SECRET"],
+          message: "SLACK_SIGNING_SECRET is required when ENABLE_SLACK=true",
+        });
+      }
+    }
+
+    if (value.ENABLE_DISCORD === "true") {
+      if (!value.DISCORD_BOT_TOKEN) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["DISCORD_BOT_TOKEN"],
+          message: "DISCORD_BOT_TOKEN is required when ENABLE_DISCORD=true",
+        });
+      }
+    }
+
+    if (value.ENABLE_WHATSAPP === "true") {
+      if (!value.WHATSAPP_PHONE_NUMBER_ID) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["WHATSAPP_PHONE_NUMBER_ID"],
+          message: "WHATSAPP_PHONE_NUMBER_ID is required when ENABLE_WHATSAPP=true",
+        });
+      }
+      if (!value.WHATSAPP_ACCESS_TOKEN) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["WHATSAPP_ACCESS_TOKEN"],
+          message: "WHATSAPP_ACCESS_TOKEN is required when ENABLE_WHATSAPP=true",
         });
       }
     }
@@ -140,6 +227,45 @@ export const appConfig = {
     botToken: parsed.TELEGRAM_BOT_TOKEN,
     webhookSecret: parsed.TELEGRAM_WEBHOOK_SECRET,
     allowedChatIds,
+  },
+  slack: {
+    enabled: parsed.ENABLE_SLACK === "true",
+    botToken: parsed.SLACK_BOT_TOKEN,
+    signingSecret: parsed.SLACK_SIGNING_SECRET,
+    appToken: parsed.SLACK_APP_TOKEN,
+  },
+  discord: {
+    enabled: parsed.ENABLE_DISCORD === "true",
+    botToken: parsed.DISCORD_BOT_TOKEN,
+    clientId: parsed.DISCORD_CLIENT_ID,
+  },
+  whatsapp: {
+    enabled: parsed.ENABLE_WHATSAPP === "true",
+    phoneNumberId: parsed.WHATSAPP_PHONE_NUMBER_ID,
+    accessToken: parsed.WHATSAPP_ACCESS_TOKEN,
+    verifyToken: parsed.WHATSAPP_VERIFY_TOKEN,
+  },
+  mentor: {
+    name: parsed.MENTOR_NAME,
+    personaFile: parsed.MENTOR_PERSONA_FILE,
+    memoryFile: parsed.MENTOR_MEMORY_FILE,
+    memoryWindow: parsed.MENTOR_MEMORY_WINDOW,
+    llmBaseUrl: parsed.MENTOR_LLM_BASE_URL || parsed.MAIN_LLM_BASE_URL,
+    llmModel: parsed.MENTOR_LLM_MODEL || parsed.SUB_LLM_MODEL,
+    llmApiKey: parsed.MENTOR_LLM_API_KEY || parsed.MAIN_LLM_API_KEY,
+    voice: {
+      enabled: parsed.ENABLE_MENTOR_VOICE === "true",
+      apiKey: parsed.MENTOR_VOICE_API_KEY || parsed.MAIN_LLM_API_KEY,
+      mode: parsed.MENTOR_CHUTES_VOICE_MODE,
+      runEndpoint: parsed.MENTOR_CHUTES_RUN_ENDPOINT,
+      whisperModel: parsed.MENTOR_CHUTES_WHISPER_MODEL,
+      csmModel: parsed.MENTOR_CHUTES_CSM_MODEL,
+      kokoroModel: parsed.MENTOR_CHUTES_KOKORO_MODEL,
+      kokoroFallback: parsed.MENTOR_CHUTES_ENABLE_KOKORO_FALLBACK === "true",
+      samplePath: parsed.MENTOR_VOICE_SAMPLE_PATH,
+      contextPath: parsed.MENTOR_VOICE_CONTEXT_PATH,
+      autoTranscribe: parsed.MENTOR_VOICE_AUTO_TRANSCRIBE === "true",
+    },
   },
   deploy: {
     domain: parsed.DOMAIN,
