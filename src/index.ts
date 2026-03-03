@@ -46,7 +46,7 @@ app.get("/healthz", async () => {
   const redisStatus = redisConnection.status;
   return {
     status: "ok",
-    service: "lippyclaw-api",
+    service: "ghostclaw-api",
     env: appConfig.env,
     redis: redisStatus,
     timestamp: new Date().toISOString(),
@@ -55,7 +55,7 @@ app.get("/healthz", async () => {
 
 app.get("/", async () => {
   return {
-    service: "lippyclaw-api",
+    service: "ghostclaw-api",
     message: "API running. Use /healthz and /api/v1/jobs.",
     endpoints: {
       health: "/healthz",

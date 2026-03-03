@@ -1,8 +1,8 @@
 {
-  "name": "lippyclaw",
+  "name": "ghostclaw-template",
   "version": "1.0.0",
   "private": true,
-  "description": "Self-contained AI automation platform with mentor and voice capabilities",
+  "description": "Generic AI deployment wrapper - one-click deploy for AI services",
   "main": "dist/index.js",
   "engines": {
     "node": ">=20.11.0"
@@ -11,8 +11,6 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
     "start:worker": "node dist/worker.js",
-    "start:mentor-mcp": "node mentor-mcp/server.mjs",
-    "start:camoufox-mcp": "node camoufox-mcp/server.mjs",
     "dev": "tsx watch src/index.ts",
     "dev:worker": "tsx watch src/worker.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json"

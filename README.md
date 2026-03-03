@@ -1,221 +1,140 @@
-# Lippyclaw
+# Ghostclaw Template
 
-Self-contained AI automation platform with mentor and voice capabilities out of the box.
+Production-grade one-click deploy for Ironclaw + Camoufox browser automation.
 
 ## Quick Start
 
-### Native Installation (Recommended for Development)
-
 ```bash
-# 1. Clone
-git clone https://github.com/lippycoin/lippyclaw
-cd lippyclaw
+# 1. Initialize
+./scripts/ghostclaw.sh init
 
-# 2. Install dependencies
-npm install
+# 2. Onboard (configure API keys, Telegram, etc.)
+./scripts/ghostclaw.sh onboard
 
-# 3. Configure
-cp .env.example .env
-# Edit .env with your API keys
-
-# 4. Start Redis (required)
-brew install redis && brew services start redis  # macOS
-# OR
-docker run -d -p 6379:6379 redis:7
-
-# 5. Run
-npm run dev           # Main API
-npm run dev:worker    # Background worker
-```
-
-### Docker Installation (Production)
-
-```bash
-git clone https://github.com/lippycoin/lippyclaw
-cd lippyclaw
-cp .env.example .env
-# Edit .env
-docker compose up -d
+# 3. Start
+./scripts/ghostclaw.sh up
 ```
 
 ## Features
 
-- **Multi-Platform Support**: Telegram, Slack, Discord, WhatsApp
-- **Built-in Mentor**: Chat and voice capabilities via MCP
-- **Browser Automation**: Camoufox integration for web tasks
-- **Voice TTS/STT**: Whisper transcription + CSM voice cloning
-- **Flexible Deployment**: Native Node.js or Docker
+- **One-Click Deploy**: Local development or Hostinger VPS
+- **Browser Automation**: Camoufox integration with anti-detection
+- **MCP Server Support**: Pluggable AI services (mentor, context7, etc.)
+- **Telegram Integration**: Built-in bot with slash commands
+- **Secure by Default**: Non-root containers, resource limits, firewall rules
 
 ## Architecture
 
-Services in the stack:
-- `lippyclaw` - Main API and orchestration
-- `worker` - Background job processor
-- `mentor-mcp` - MCP adapter for mentor persona chat + voice tools
-- `camoufox-mcp` - MCP adapter for browser automation
-- `redis` - Queue and state management
-- `postgres` (optional) - For Ironclaw runtime with memory
+```
+┌─────────────────────────────────────────────────────────────┐
+│                      Docker Compose Stack                    │
+├─────────────────────────────────────────────────────────────┤
+│  ┌─────────────┐  ┌──────────────┐  ┌─────────────────────┐ │
+│  │  caddy      │  │  ironclaw    │  │  camoufox-tool      │ │
+│  │  (reverse   │  │  (gateway)   │  │  (browser API)      │ │
+│  │   proxy)    │  │              │  │                     │ │
+│  └─────────────┘  └──────────────┘  └─────────────────────┘ │
+│  ┌─────────────┐  ┌──────────────┐  ┌─────────────────────┐ │
+│  │  camoufox-  │  │  mentor-mcp  │  │  redis              │ │
+│  │  mcp        │  │  (optional)  │  │  (queue/cache)      │ │
+│  └─────────────┘  └──────────────┘  └─────────────────────┘ │
+└─────────────────────────────────────────────────────────────┘
+```
 
 ## Command Reference
 
 ```bash
-# Development
-npm run dev              # Start main API with hot reload
-npm run dev:worker       # Start worker with hot reload
+# Setup
+./scripts/ghostclaw.sh init          # Generate .env file
+./scripts/ghostclaw.sh onboard       # Interactive configuration
 
-# Production
-npm run build            # Compile TypeScript
-npm start                # Start main API
-npm run start:worker     # Start worker
-npm run start:mentor-mcp # Start mentor MCP server
-npm run start:camoufox-mcp # Start camoufox MCP server
+# Lifecycle
+./scripts/ghostclaw.sh up            # Start all services
+./scripts/ghostclaw.sh down          # Stop all services
+./scripts/ghostclaw.sh restart       # Full restart
 
-# Utilities
-npm run typecheck        # Type check without emitting
+# Deployment
+./scripts/ghostclaw.sh deploy:vps    # Deploy to Hostinger VPS
+./scripts/ghostclaw.sh rollback:vps  # Rollback to previous release
+
+# Telegram
+./scripts/ghostclaw.sh telegram:commands  # Register slash commands
+./scripts/ghostclaw.sh webhook:set        # Set webhook URL
+
+# MCP Servers
+./scripts/ghostclaw.sh mcp:add <name> <url>   # Register MCP server
+./scripts/ghostclaw.sh mcp:remove <name>      # Remove MCP server
+./scripts/ghostclaw.sh mcp:list               # List registered servers
 ```
 
 ## Configuration
 
-### Required Variables
+Edit `.env` after running `init`:
 
-| Variable | Description |
-|----------|-------------|
-| `MAIN_LLM_API_KEY` | API key for main LLM (ChutesAI) |
-| `SUB_LLM_API_KEY` | API key for sub-agent LLM |
-| `REDIS_URL` | Redis connection URL |
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `MAIN_LLM_API_KEY` | API key for main LLM | Required |
+| `SUB_LLM_API_KEY` | API key for sub-agent LLM | Required |
+| `TELEGRAM_BOT_TOKEN` | Telegram bot token | Optional |
+| `TELEGRAM_WEBHOOK_SECRET` | Secret for webhook validation | Auto-generated |
+| `IRONCLAW_GIT_URL` | Ironclaw repository URL | nearai/ironclaw |
+| `IRONCLAW_GIT_REF` | Ironclaw branch/tag | v0.12.0 |
 
-### Platform Integrations
+## Platform Support
 
-#### Telegram
+| Platform | Status | Notes |
+|----------|--------|-------|
+| Local (macOS/Linux) | ✅ | Requires Docker Desktop or Docker Engine |
+| Hostinger VPS | ✅ | One-click deploy via SSH |
+| Railway/Render | ⚠️ | Requires custom configuration |
 
-```bash
-ENABLE_TELEGRAM=true
-TELEGRAM_BOT_TOKEN=your_bot_token
-TELEGRAM_WEBHOOK_SECRET=your_secret
-```
+## Requirements
 
-#### Slack
+- Docker Engine 24+
+- Docker Compose 2.20+
+- Node.js 20+ (for local development)
+- Redis (included in Docker stack)
+- 4GB RAM minimum (8GB recommended)
 
-```bash
-ENABLE_SLACK=true
-SLACK_BOT_TOKEN=xoxb-...
-SLACK_SIGNING_SECRET=...
-SLACK_APP_TOKEN=xapp-...
-```
+## Security
 
-#### Discord
-
-```bash
-ENABLE_DISCORD=true
-DISCORD_BOT_TOKEN=...
-DISCORD_CLIENT_ID=...
-```
-
-#### WhatsApp
-
-```bash
-ENABLE_WHATSAPP=true
-WHATSAPP_PHONE_NUMBER_ID=...
-WHATSAPP_ACCESS_TOKEN=...
-WHATSAPP_VERIFY_TOKEN=...
-```
-
-### Mentor Configuration
-
-```bash
-MENTOR_NAME=Lippyclaw Mentor
-MENTOR_LLM_API_KEY=...
-ENABLE_MENTOR_VOICE=true
-MENTOR_VOICE_API_KEY=...
-MENTOR_VOICE_SAMPLE_PATH=./mentor/master-voice.wav
-```
-
-## Mentor Tools (Auto-Wired)
-
-Mentor tools exposed to the platform:
-- `mentor.chat` - Chat with mentor persona
-- `mentor.speak` - Convert text to mentor voice
-- `mentor.transcribe` - Transcribe audio to text
-- `mentor.voice_bootstrap` - Generate voice context
-- `mentor.status` - Check mentor runtime status
-
-Voice processing flow (Chutes):
-1. Place reference media at `./mentor/master-voice.wav`
-2. Set `MENTOR_VOICE_API_KEY` in `.env`
-3. Voice context is auto-generated on first run
-4. Runtime pipeline:
-   - STT: `MENTOR_CHUTES_WHISPER_MODEL`
-   - Voice clone: `MENTOR_CHUTES_CSM_MODEL`
-   - Fallback TTS: `MENTOR_CHUTES_KOKORO_MODEL`
-
-## Camoufox Tools (Auto-Wired)
-
-Browser automation tools with prefix `camoufox_`:
-- `camoufox_browser.session_new`
-- `camoufox_browser.goto`
-- `camoufox_browser.click`
-- `camoufox_browser.fill`
-- `camoufox_browser.press`
-- `camoufox_browser.click_xy`
-- `camoufox_browser.wait_for_selector`
-- `camoufox_browser.wait`
-- `camoufox_browser.screenshot`
-- `camoufox_browser.session_close`
-
-## API Endpoints
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/healthz` | GET | Health check |
-| `/` | GET | API info |
-| `/api/v1/jobs` | POST | Queue browser job |
-| `/api/v1/jobs/:jobId` | GET | Get job status |
-| `/telegram/webhook` | POST | Telegram webhook |
-| `/slack/webhook` | POST | Slack webhook |
-| `/discord/webhook` | POST | Discord webhook |
-| `/whatsapp/webhook` | POST | WhatsApp webhook |
-
-## Resource Requirements
-
-### Local Development
-- 4 vCPU
-- 8 GB RAM
-- 30 GB free disk
-
-### Production
-- 8 vCPU
-- 16 GB RAM
-- 60 GB free disk
+- Secrets stored in `.env` (mode 600)
+- Non-root container execution
+- Read-only root filesystem where possible
+- Resource limits (CPU, memory, pids)
+- Firewall allows only 22/80/443
 
 ## Troubleshooting
 
-### Redis Connection Failed
+### Telegram Commands Not Working
 
-Ensure Redis is running:
 ```bash
-redis-cli ping  # Should return PONG
+# Re-register commands
+./scripts/ghostclaw.sh telegram:commands
+
+# Check webhook status
+curl -X POST "https://api.telegram.org/bot<TOKEN>/getWebhookInfo"
 ```
 
-### Mentor Voice Bootstrap Fails
+### MCP Server Not Responding
 
-Check:
-- `MENTOR_VOICE_API_KEY` is set
-- Sample file exists at `./mentor/master-voice.wav`
-- Chutes endpoint is valid
+```bash
+# Check health
+curl http://localhost:8791/healthz
 
-### Webhook Setup Fails
+# Restart MCP server
+docker compose restart mentor-mcp
+```
 
-Check:
-- Platform tokens are configured
-- Webhook secret matches
-- Tunnel is running (local mode)
+### VPS Deploy Fails
 
-## Security Notes
+```bash
+# Check SSH connection
+ssh -i <KEY> <USER>@<HOST>
 
-- Store secrets in `.env` (mode `600`)
-- Never commit `.env`
-- Rotate API tokens after tests
-- Use `INTERNAL_API_TOKEN` for internal API routes
+# Check remote Docker
+ssh -i <KEY> <USER>@<HOST> "docker version"
+```
 
 ## License
 

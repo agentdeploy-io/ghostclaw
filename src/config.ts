@@ -73,7 +73,7 @@ const schema = z
     WHATSAPP_VERIFY_TOKEN: z.string().optional(),
     
     // Mentor configuration
-    MENTOR_NAME: z.string().default("Lippyclaw Mentor"),
+    MENTOR_NAME: z.string().default("Ghostclaw Mentor"),
     MENTOR_PERSONA_FILE: z.string().default("./mentor/persona.md"),
     MENTOR_MEMORY_FILE: z.string().default("./data/mentor/memory.json"),
     MENTOR_MEMORY_WINDOW: z.coerce.number().int().min(1).default(14),
