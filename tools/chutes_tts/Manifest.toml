@@ -1,0 +1,171 @@
+# Chutes Text-to-Speech WASM Tool Manifest
+# This manifest defines the security capabilities and constraints for the TTS tool with voice cloning.
+
+[tool]
+name = "chutes_tts"
+version = "1.0.0"
+description = "Text-to-speech with voice cloning using Chutes.ai CSM/Kokoro models"
+author = "IronClaw/Lippyclaw"
+
+[entrypoint]
+wasm_file = "target/wasm32-wasi/release/chutes_tts.wasm"
+function = "synthesize"
+
+# ============================================================================
+# CAPABILITY-BASED SECURITY
+# ============================================================================
+
+[capabilities]
+# Network access - restricted to Chutes.ai only
+network = { allowed_hosts = ["llm.chutes.ai"], allowed_ports = [443] }
+
+# Filesystem access - strictly scoped
+[capabilities.filesystem]
+# Read-only scopes - where the tool can read from
+fs_ro_scopes = [
+    "/agents/mentor/",        # Master voice sample for cloning (CRITICAL: read-only)
+    "/tmp/tts_input/",        # Temporary input directory for text files
+]
+
+# Read-write scopes - where the tool can write to
+fs_rw_scopes = [
+    "/tmp/tts_output/",       # Synthesized audio output directory
+    "/tmp/tts_cache/",        # Cache for processing
+    "/agents/mentor/checkpoints/", # Voice synthesis logs
+]
+
+# Explicitly denied paths - NEVER accessible
+fs_denied = [
+    "/workspace/**",          # Main workspace - denied
+    "/agents/main_agent/**",  # Main agent directory - denied
+    "**/.env*",               # Environment files - denied
+    "**/*.key",               # Key files - denied
+    "**/secrets/**",          # Secrets directories - denied
+    "/etc/**",                # System directories - denied
+    "/root/**",               # Root home - denied
+]
+
+# CRITICAL: Master voice sample protection
+[capabilities.filesystem.protected_files]
+"/agents/mentor/master-voice.wav" = { read = true, write = false, delete = false, checksum_required = true }
+"/agents/mentor/persona.md" = { read = false, write = false, delete = false }
+
+# Process execution - completely disabled
+[capabilities.process]
+allow_exec = false
+allow_spawn = false
+allow_fork = false
+
+# Environment variables - explicitly listed only
+[capabilities.environment]
+allowed_vars = [
+    "CHUTES_API_KEY",
+    "CHUTES_BASE_URL",
+    "CHUTES_VOICE_MODEL",
+    "RUST_LOG",
+]
+denied_vars = [
+    "DATABASE_URL",
+    "TELEGRAM_BOT_TOKEN",
+    "MASTER_KEY",
+    "SECRET*",
+    "API_KEY*",
+    "*PASSWORD*",
+]
+
+# ============================================================================
+# RESOURCE LIMITS
+# ============================================================================
+
+[resources]
+max_memory_mb = 512
+max_cpu_time_ms = 45000
+max_wall_time_ms = 90000
+max_file_size_mb = 25
+max_network_requests = 5
+
+# ============================================================================
+# INPUT/OUTPUT SCHEMA
+# ============================================================================
+
+[input]
+# Expected input format for the synthesize function
+text = { type = "string", required = true, description = "Text to synthesize into speech", max_length = 2000 }
+reference_audio_path = { type = "string", required = false, default = "/agents/mentor/master-voice.wav", description = "Path to voice sample for cloning (must be in fs_ro_scopes)" }
+model = { type = "string", required = false, default = "sesame/csm-1b", description = "TTS model to use" }
+format = { type = "string", required = false, default = "mp3", description = "Output audio format" }
+speed = { type = "number", required = false, default = 1.0, description = "Speech speed multiplier (0.5-2.0)" }
+
+[output]
+# Output format returned by the tool
+audio_path = { type = "string", description = "Path to synthesized audio file" }
+duration_ms = { type = "number", description = "Audio duration in milliseconds" }
+model_used = { type = "string", description = "Model that was used (may differ from requested if fallback)" }
+character_count = { type = "number", description = "Number of characters in input text" }
+
+# ============================================================================
+# SECURITY AUDIT TRAIL
+# ============================================================================
+
+[audit]
+# All tool invocations are logged with:
+log_invocation = true
+log_input_text_length = true
+log_output_size = true
+log_network_destinations = true
+log_execution_time = true
+log_reference_audio_checksum = true
+
+# Never log:
+never_log_input_content = false   # Log input text for audit
+never_log_output_content = true   # Don't log raw audio data
+
+# Voice sample integrity verification
+verify_reference_audio_checksum = true
+reference_audio_checksum_path = "/agents/mentor/checkpoints/voice_checksum.sha256"
+
+# ============================================================================
+# MODEL CONFIGURATION
+# ============================================================================
+
+[model]
+# Primary voice cloning model
+primary_model = "sesame/csm-1b"
+primary_endpoint = "/v1/run"
+
+# Fallback model (no cloning, generic voice)
+fallback_model = "hexgrad/Kokoro-82M"
+fallback_endpoint = "/v1/run"
+
+# API configuration
+api_timeout_ms = 40000
+max_retries = 2
+
+# Voice cloning requirements
+min_sample_duration_ms = 5000     # 5 seconds minimum
+max_sample_duration_ms = 30000    # 30 seconds maximum
+sample_format = "wav"             # Expected format for reference audio
+sample_rate = 48000               # Expected sample rate
+
+# Output configuration
+output_formats = ["mp3", "wav", "ogg"]
+default_output_format = "mp3"
+default_sample_rate = 24000
+
+# ============================================================================
+# VOICE CLONING SECURITY
+# ============================================================================
+
+[voice_cloning]
+# Voice cloning specific security measures
+
+# The reference audio MUST be:
+require_explicit_path = true              # Must specify reference_audio_path
+path_must_be_in_ro_scopes = true          # Must be in allowed read-only scopes
+path_cannot_be_user_provided = true       # Cannot come from user input directly
+checksum_verification = true               # Must match stored checksum
+
+# Protected against:
+prevent_voice_theft = true                # Cannot use arbitrary audio for cloning
+prevent_voice_spoofing = true             # Checksum prevents substitution
+prevent_model_poisoning = true            # Model selection is validated

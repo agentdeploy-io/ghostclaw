@@ -1,0 +1,44 @@
+[package]
+name = "chutes_tts"
+version = "1.0.0"
+edition = "2021"
+description = "Text-to-speech with voice cloning using Chutes.ai CSM/Kokoro models"
+authors = ["IronClaw/Lippyclaw"]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+# WASM bindings
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+js-sys = "0.3"
+
+# Async runtime for WASM
+wasm-timer = "0.2"
+
+# HTTP client
+reqwest = { version = "0.11", default-features = false, features = ["json"] }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Base64 encoding for audio data
+base64 = "0.21"
+
+# Error handling
+thiserror = "1.0"
+
+# Logging
+web-sys = { version = "0.3", features = ["console"] }
+
+# Optional: for UUID generation
+uuid = { version = "1.0", features = ["v4", "js"] }
+
+[dev-dependencies]
+wasm-bindgen-test = "0.3"
+
+[profile.release]
+opt-level = "s"
+lto = true

@@ -75,6 +75,62 @@ const mentorTranscribe = async (audioData: Buffer, mimeType = "audio/wav"): Prom
   return result.text;
 };
 
+// ============================================================================
+// Voice-MCP HTTP Client (Standalone Voice Service)
+// ============================================================================
+
+const voiceTranscribe = async (audioData: Buffer, mimeType = "audio/wav"): Promise<string> => {
+  const voiceUrl = appConfig.telegramVoice.mcpUrl;
+  
+  const base64Audio = audioData.toString("base64");
+  
+  const response = await fetch(`${voiceUrl}/transcribe`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      base64Audio,
+      mimeType,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new AppError(
+      "VOICE_TRANSCRIBE_FAILED",
+      `Voice-MCP error (${response.status}): ${errorText.slice(0, 300)}`,
+      502,
+    );
+  }
+
+  const result = await response.json() as { text: string };
+  return result.text;
+};
+
+const voiceSpeak = async (text: string, useCloning = true): Promise<Buffer> => {
+  const voiceUrl = appConfig.telegramVoice.mcpUrl;
+  
+  const response = await fetch(`${voiceUrl}/speak`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text, useCloning }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new AppError(
+      "VOICE_SPEAK_FAILED",
+      `Voice-MCP error (${response.status}): ${errorText.slice(0, 300)}`,
+      502,
+    );
+  }
+
+  const result = await response.json() as { artifactPath: string };
+  
+  // Read the generated audio file
+  const { readFile } = await import("node:fs/promises");
+  return await readFile(result.artifactPath);
+};
+
 const redisConnection = createRedisConnection(appConfig.redisUrl);
 const queue = createAutomationQueue(redisConnection);
 

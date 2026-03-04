@@ -74,7 +74,8 @@ const schema = z
     
     // Mentor configuration
     MENTOR_NAME: z.string().default("Ghostclaw Mentor"),
-    MENTOR_PERSONA_FILE: z.string().default("./mentor/persona.md"),
+    MENTOR_PERSONA_FILE: z.string().default("./agents/mentor/persona.md"),
+    MENTOR_SKILLS_FILE: z.string().default("./agents/mentor/skills.md"),
     MENTOR_MEMORY_FILE: z.string().default("./data/mentor/memory.json"),
     MENTOR_MEMORY_WINDOW: z.coerce.number().int().min(1).default(14),
     MENTOR_LLM_BASE_URL: z.string().url().optional(),
@@ -93,6 +94,23 @@ const schema = z
     MENTOR_VOICE_SAMPLE_PATH: z.string().default("./mentor/master-voice.wav"),
     MENTOR_VOICE_CONTEXT_PATH: z.string().default("./data/mentor/voice_context.txt"),
     MENTOR_VOICE_AUTO_TRANSCRIBE: z.enum(["true", "false"]).default("true"),
+    
+    // Voice-MCP configuration (standalone voice service)
+    MCP_VOICE_ENABLED: z.enum(["true", "false"]).default("false"),
+    ENABLE_VOICE: z.enum(["true", "false"]).default("false"),
+    VOICE_MODE: z.string().default("run_api"),
+    VOICE_API_BASE_URL: z.string().url().optional(),
+    VOICE_API_KEY: z.string().optional(),
+    VOICE_RUN_ENDPOINT: z.string().optional(),
+    VOICE_WHISPER_MODEL: z.string().default("openai/whisper-large-v3-turbo"),
+    VOICE_CLONE_MODEL: z.string().default("sesame/csm-1b"),
+    VOICE_KOKORO_MODEL: z.string().default("hexgrad/Kokoro-82M"),
+    VOICE_ENABLE_KOKORO_FALLBACK: z.enum(["true", "false"]).default("true"),
+    VOICE_SAMPLE_PATH: z.string().default("./data/voice/master-voice.wav"),
+    VOICE_CONTEXT_PATH: z.string().default("./data/voice/voice_context.txt"),
+    VOICE_ARTIFACT_DIR: z.string().default("./data/artifacts/voice"),
+    TELEGRAM_VOICE_MCP_URL: z.string().optional(),
+    ENABLE_TELEGRAM_VOICE_NOTES: z.enum(["true", "false"]).default("true"),
     
     // Deployment
     DOMAIN: z.string().optional(),
@@ -248,6 +266,7 @@ export const appConfig = {
   mentor: {
     name: parsed.MENTOR_NAME,
     personaFile: parsed.MENTOR_PERSONA_FILE,
+    skillsFile: parsed.MENTOR_SKILLS_FILE,
     memoryFile: parsed.MENTOR_MEMORY_FILE,
     memoryWindow: parsed.MENTOR_MEMORY_WINDOW,
     llmBaseUrl: parsed.MENTOR_LLM_BASE_URL || parsed.MAIN_LLM_BASE_URL,
@@ -266,6 +285,24 @@ export const appConfig = {
       contextPath: parsed.MENTOR_VOICE_CONTEXT_PATH,
       autoTranscribe: parsed.MENTOR_VOICE_AUTO_TRANSCRIBE === "true",
     },
+  },
+  voiceMcp: {
+    enabled: parsed.MCP_VOICE_ENABLED === "true" || parsed.ENABLE_VOICE === "true",
+    mode: parsed.VOICE_MODE,
+    apiBaseUrl: parsed.VOICE_API_BASE_URL || parsed.MAIN_LLM_BASE_URL,
+    apiKey: parsed.VOICE_API_KEY || parsed.MAIN_LLM_API_KEY,
+    runEndpoint: parsed.VOICE_RUN_ENDPOINT,
+    whisperModel: parsed.VOICE_WHISPER_MODEL,
+    cloneModel: parsed.VOICE_CLONE_MODEL,
+    kokoroModel: parsed.VOICE_KOKORO_MODEL,
+    kokoroFallback: parsed.VOICE_ENABLE_KOKORO_FALLBACK === "true",
+    samplePath: parsed.VOICE_SAMPLE_PATH,
+    contextPath: parsed.VOICE_CONTEXT_PATH,
+    artifactDir: parsed.VOICE_ARTIFACT_DIR,
+  },
+  telegramVoice: {
+    mcpUrl: parsed.TELEGRAM_VOICE_MCP_URL || "http://voice-mcp:8792",
+    enabled: parsed.ENABLE_TELEGRAM_VOICE_NOTES === "true",
   },
   deploy: {
     domain: parsed.DOMAIN,

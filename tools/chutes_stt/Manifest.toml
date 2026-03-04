@@ -1,0 +1,133 @@
+# Chutes Speech-to-Text WASM Tool Manifest
+# This manifest defines the security capabilities and constraints for the STT tool.
+
+[tool]
+name = "chutes_stt"
+version = "1.0.0"
+description = "Speech-to-text transcription using Chutes.ai Whisper models"
+author = "IronClaw/Lippyclaw"
+
+[entrypoint]
+wasm_file = "target/wasm32-wasi/release/chutes_stt.wasm"
+function = "transcribe"
+
+# ============================================================================
+# CAPABILITY-BASED SECURITY
+# ============================================================================
+
+[capabilities]
+# Network access - restricted to Chutes.ai only
+network = { allowed_hosts = ["llm.chutes.ai"], allowed_ports = [443] }
+
+# Filesystem access - strictly scoped
+[capabilities.filesystem]
+# Read-only scopes - where the tool can read from
+fs_ro_scopes = [
+    "/tmp/stt_input/",      # Temporary input directory for audio files
+    "/agents/mentor/",      # Voice sample (for validation only)
+]
+
+# Read-write scopes - where the tool can write to
+fs_rw_scopes = [
+    "/tmp/stt_output/",     # Transcription output directory
+    "/tmp/stt_cache/",      # Cache for processing
+]
+
+# Explicitly denied paths - NEVER accessible
+fs_denied = [
+    "/workspace/**",        # Main workspace - denied
+    "/agents/main_agent/**", # Main agent directory - denied
+    "**/.env*",             # Environment files - denied
+    "**/*.key",             # Key files - denied
+    "**/secrets/**",        # Secrets directories - denied
+    "/etc/**",              # System directories - denied
+    "/root/**",             # Root home - denied
+]
+
+# Process execution - completely disabled
+[capabilities.process]
+allow_exec = false
+allow_spawn = false
+allow_fork = false
+
+# Environment variables - explicitly listed only
+[capabilities.environment]
+allowed_vars = [
+    "CHUTES_API_KEY",
+    "CHUTES_BASE_URL",
+    "RUST_LOG",
+]
+denied_vars = [
+    "DATABASE_URL",
+    "TELEGRAM_BOT_TOKEN",
+    "MASTER_KEY",
+    "SECRET*",
+    "API_KEY*",
+    "*PASSWORD*",
+]
+
+# ============================================================================
+# RESOURCE LIMITS
+# ============================================================================
+
+[resources]
+max_memory_mb = 256
+max_cpu_time_ms = 30000
+max_wall_time_ms = 60000
+max_file_size_mb = 50
+max_network_requests = 5
+
+# ============================================================================
+# INPUT/OUTPUT SCHEMA
+# ============================================================================
+
+[input]
+# Expected input format for the transcribe function
+audio_path = { type = "string", required = true, description = "Path to audio file (must be in fs_ro_scopes)" }
+mime_type = { type = "string", required = false, default = "audio/ogg", description = "MIME type of audio" }
+language = { type = "string", required = false, description = "Optional language code (e.g., 'en', 'es')" }
+
+[output]
+# Output format returned by the tool
+transcription = { type = "string", description = "Transcribed text" }
+confidence = { type = "number", description = "Confidence score (0.0-1.0)" }
+language_detected = { type = "string", description = "Detected language code" }
+duration_ms = { type = "number", description = "Audio duration in milliseconds" }
+
+# ============================================================================
+# SECURITY AUDIT TRAIL
+# ============================================================================
+
+[audit]
+# All tool invocations are logged with:
+log_invocation = true
+log_input_paths = true
+log_output_size = true
+log_network_destinations = true
+log_execution_time = true
+
+# Never log:
+never_log_input_content = true    # Don't log raw audio data
+never_log_output_content = false  # Log transcription text for audit
+
+# ============================================================================
+# MODEL CONFIGURATION
+# ============================================================================
+
+[model]
+default_model = "openai/whisper-large-v3-turbo"
+fallback_model = "openai/whisper-large-v3"
+api_endpoint = "/v1/run"
+timeout_ms = 25000
+
+# Supported audio formats
+supported_formats = [
+    "audio/ogg",
+    "audio/wav",
+    "audio/mp3",
+    "audio/mp4",
+    "audio/webm",
+]
+
+# Maximum audio duration
+max_audio_duration_ms = 300000  # 5 minutes

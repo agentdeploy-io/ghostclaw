@@ -11,7 +11,8 @@ const port = Number(process.env.MENTOR_MCP_PORT || "8791");
 const protocolVersion = "2024-11-05";
 
 const mentorName = process.env.MENTOR_NAME || "Ghostclaw Mentor";
-const mentorPersonaFile = process.env.MENTOR_PERSONA_FILE || "/mentor/persona.md";
+const mentorPersonaFile = process.env.MENTOR_PERSONA_FILE || "/agents/mentor/persona.md";
+const mentorSkillsFile = process.env.MENTOR_SKILLS_FILE || "/agents/mentor/skills.md";
 const mentorMemoryFile = process.env.MENTOR_MEMORY_FILE || "/data/mentor/memory.json";
 const mentorMemoryWindow = Math.max(1, Number(process.env.MENTOR_MEMORY_WINDOW || "14"));
 
@@ -469,7 +470,13 @@ const loadPersona = async () => {
   }
 
   try {
-    personaCache = await readFile(mentorPersonaFile, "utf8");
+    const [personaContent, skillsContent] = await Promise.all([
+      readFile(mentorPersonaFile, "utf8"),
+      readFile(mentorSkillsFile, "utf8").catch(() => ""),
+    ]);
+    
+    // Concatenate persona and skills into system prompt
+    personaCache = [personaContent, skillsContent].filter(Boolean).join("\n\n");
   } catch {
     personaCache = [
       `You are ${mentorName}.`,

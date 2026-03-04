@@ -1,0 +1,303 @@
+# IronClaw/Lippyclaw Capability-Based Security Configuration
+# This file defines directory scopes, capabilities, and access controls for all agents and tools.
+
+# ============================================================================
+# GLOBAL SETTINGS
+# ============================================================================
+
+[global]
+# Security mode: strict | permissive
+security_mode = "strict"
+
+# Enable audit logging for all capability checks
+audit_logging = true
+
+# Fail closed on capability violations (deny by default)
+fail_closed = true
+
+# ============================================================================
+# AGENT SCOPES
+# ============================================================================
+
+# ----------------------------------------------------------------------------
+# Main Agent Configuration
+# ----------------------------------------------------------------------------
+[agents.main_agent]
+name = "Main Agent"
+description = "Primary operational agent for user tasks"
+
+[agents.main_agent.capabilities]
+# Filesystem access
+fs_rw_scopes = [
+    "/workspace/**",
+    "/tmp/main_agent/**",
+]
+fs_ro_scopes = [
+    "/tools/**",
+]
+
+# Network access
+network_allowed_hosts = ["*"]  # Configurable per-task
+network_denied_hosts = [
+    "localhost",
+    "127.0.0.1",
+    "10.*",
+    "192.168.*",
+    "172.16.*",
+    "172.17.*",
+    "172.18.*",
+    "172.19.*",
+    "172.20.*",
+    "172.21.*",
+    "172.22.*",
+    "172.23.*",
+    "172.24.*",
+    "172.25.*",
+    "172.26.*",
+    "172.27.*",
+    "172.28.*",
+    "172.29.*",
+    "172.30.*",
+    "172.31.*",
+]
+
+# Process execution
+allow_exec = true
+allow_spawn = false
+
+# Explicitly denied - Mentor territory
+fs_denied = [
+    "/agents/mentor/**",
+    "/agents/mentor/master-voice.wav",
+    "/agents/mentor/persona.md",
+    "/agents/mentor/checkpoints/**",
+]
+
+# ----------------------------------------------------------------------------
+# Mentor Agent Configuration
+# ----------------------------------------------------------------------------
+[agents.mentor]
+name = "Mentor Agent"
+description = "Out-of-band auditor and safety evaluator"
+
+[agents.mentor.capabilities]
+# Filesystem access - READ ONLY except checkpoints
+fs_ro_scopes = [
+    "/workspace/logs/**",           # Main Agent logs (read-only audit access)
+    "/agents/mentor/",              # Own directory (read-only)
+    "/tools/**",                    # Tool definitions
+]
+fs_rw_scopes = [
+    "/agents/mentor/checkpoints/",  # Session state
+    "/tmp/mentor/**",               # Temporary processing
+]
+
+# Network access - restricted to Chutes.ai and Telegram
+network_allowed_hosts = [
+    "llm.chutes.ai",
+    "api.telegram.org",
+]
+network_denied_hosts = ["*"]  # Deny all others
+
+# Process execution - disabled
+allow_exec = false
+allow_spawn = false
+
+# CRITICAL: Cannot access Main Agent workspace
+fs_denied = [
+    "/workspace/code/**",
+    "/workspace/.env*",
+    "/workspace/secrets/**",
+    "/agents/main_agent/**",
+]
+
+# Persona and voice integrity
+[agents.mentor.integrity]
+persona_checksum_path = "/agents/mentor/checkpoints/persona_checksum.sha256"
+voice_checksum_path = "/agents/mentor/checkpoints/voice_checksum.sha256"
+verify_on_startup = true
+refuse_on_mismatch = true
+
+# ============================================================================
+# WASM TOOL SCOPES
+# ============================================================================
+
+# ----------------------------------------------------------------------------
+# Chutes STT (Speech-to-Text)
+# ----------------------------------------------------------------------------
+[tools.chutes_stt]
+enabled = true
+wasm_path = "tools/chutes_stt/target/wasm32-wasi/release/chutes_stt.wasm"
+
+[tools.chutes_stt.capabilities]
+fs_ro_scopes = [
+    "/tmp/stt_input/**",
+    "/agents/mentor/master-voice.wav",  # For validation only
+]
+fs_rw_scopes = [
+    "/tmp/stt_output/**",
+    "/tmp/stt_cache/**",
+]
+fs_denied = [
+    "/workspace/**",
+    "/agents/main_agent/**",
+    "**/.env*",
+    "**/secrets/**",
+]
+network_allowed_hosts = ["llm.chutes.ai"]
+network_allowed_ports = [443]
+allow_exec = false
+max_memory_mb = 256
+max_execution_time_ms = 30000
+
+# ----------------------------------------------------------------------------
+# Chutes TTS (Text-to-Speech with Voice Cloning)
+# ----------------------------------------------------------------------------
+[tools.chutes_tts]
+enabled = true
+wasm_path = "tools/chutes_tts/target/wasm32-wasi/release/chutes_tts.wasm"
+
+[tools.chutes_tts.capabilities]
+fs_ro_scopes = [
+    "/agents/mentor/",              # Master voice sample (CRITICAL: read-only)
+    "/tmp/tts_input/**",
+]
+fs_rw_scopes = [
+    "/tmp/tts_output/**",
+    "/tmp/tts_cache/**",
+    "/agents/mentor/checkpoints/",  # Synthesis logs
+]
+fs_denied = [
+    "/workspace/**",
+    "/agents/main_agent/**",
+    "**/.env*",
+    "**/secrets/**",
+]
+
+# Protected files - cannot be modified even if in rw scope
+[tools.chutes_tts.capabilities.protected_files]
+"/agents/mentor/master-voice.wav" = { read = true, write = false, delete = false, checksum_required = true }
+"/agents/mentor/persona.md" = { read = false, write = false, delete = false }
+
+network_allowed_hosts = ["llm.chutes.ai"]
+network_allowed_ports = [443]
+allow_exec = false
+max_memory_mb = 512
+max_execution_time_ms = 45000
+
+# ============================================================================
+# CHANNEL INTEGRATIONS
+# ============================================================================
+
+# ----------------------------------------------------------------------------
+# Telegram Channel
+# ----------------------------------------------------------------------------
+[channels.telegram]
+enabled = false  # Set true to enable
+
+[channels.telegram.capabilities]
+# Can emit messages to agents
+can_emit_to = ["main_agent", "mentor"]
+
+# Can send via Telegram Bot API
+network_allowed_hosts = ["api.telegram.org"]
+network_allowed_ports = [443]
+
+# Voice note handling
+[channels.telegram.voice]
+enabled = true
+auto_transcribe = true
+transcribe_tool = "chutes_stt"
+voice_response_tool = "chutes_tts"
+voice_sample_path = "/agents/mentor/master-voice.wav"
+
+# Command routing
+[channels.telegram.commands]
+"/mentor" = { route_to = "mentor", requires_voice = false }
+"/mentor_voice" = { route_to = "mentor", requires_voice = true }
+"/transcribe" = { route_to = "chutes_stt", requires_voice = true }
+"/help" = { route_to = "main_agent", requires_voice = false }
+"/status" = { route_to = "mentor", requires_voice = false }
+
+# ============================================================================
+# DUCKDB SHARED LOG CONFIGURATION
+# ============================================================================
+
+[logging]
+# Shared DuckDB for agent communication
+database_path = "/workspace/logs/agent_history.db"
+
+# Main Agent writes here
+[logging.main_agent]
+write_path = "/workspace/logs/agent_history.db"
+read_path = "/workspace/logs/agent_history.db"
+
+# Mentor reads Main Agent logs (read-only)
+[logging.mentor]
+read_path = "/workspace/logs/agent_history.db"
+write_path = "/agents/mentor/evaluations.log"
+
+# Schema for shared log table
+[logging.schema]
+table_name = "agent_logs"
+columns = [
+    "id UUID PRIMARY KEY",
+    "agent_name TEXT NOT NULL",
+    "action_type TEXT NOT NULL",
+    "action_payload JSONB",
+    "result_status TEXT",
+    "result_data JSONB",
+    "timestamp TIMESTAMPTZ DEFAULT NOW()",
+    "execution_time_ms INTEGER",
+]
+
+# ============================================================================
+# DUAL-WORKSPACE CONFIGURATION
+# ============================================================================
+
+[workspaces]
+# Main workspace - where code is written and executed
+main_workspace = "/workspace"
+
+# Mentor workspace - separate cognitive space
+mentor_workspace = "/agents/mentor"
+
+# Symlink configuration for cross-workspace access
+[workspaces.symlinks]
+# Mentor can read Main workspace logs (read-only symlink)
+"/agents/mentor/workspace_logs" = { target = "/workspace/logs", access = "ro" }
+
+# ============================================================================
+# AUDIT CONFIGURATION
+# ============================================================================
+
+[audit]
+# Log all capability checks
+log_capability_checks = true
+
+# Log all file access attempts
+log_file_access = true
+
+# Log all network requests
+log_network_requests = true
+
+# Alert on denied access attempts
+alert_on_denial = true
+
+# Retention period for audit logs (days)
+retention_days = 90
+
+# ============================================================================
+# EMERGENCY OVERRIDES
+# ============================================================================
+
+[emergency]
+# Kill switch for all agents
+kill_switch_enabled = true
+kill_switch_file = "/tmp/.ironclaw_kill_switch"
+
+# Emergency capability suspension
+suspend_all_capabilities = false
+
+# Emergency contact (for alerts)
+alert_webhook_url = ""  # Optional webhook for security alerts

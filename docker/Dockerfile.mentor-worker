@@ -1,0 +1,83 @@
+# Mentor Worker Dockerfile
+# Secure container for the Mentor AI agent with capability-based security
+
+FROM rust:1.75-bookworm as builder
+
+WORKDIR /build
+
+# Copy workspace
+COPY Cargo.toml Cargo.lock ./
+COPY tools/chutes_stt tools/chutes_stt
+COPY tools/chutes_tts tools/chutes_tts
+COPY src src
+
+# Build WASM tools
+RUN rustup target add wasm32-wasi && \
+    cargo build --release --target wasm32-wasi -p chutes_stt && \
+    cargo build --release --target wasm32-wasi -p chutes_tts
+
+# Build Mentor Worker
+RUN cargo build --release --features mentor
+
+# ============================================================================
+# Runtime Image
+# ============================================================================
+
+FROM debian:bookworm-slim
+
+# Security: Run as non-root user
+RUN groupadd --gid 1000 mentor && \
+    useradd --uid 1000 --gid mentor --shell /bin/false --create-home mentor
+
+WORKDIR /app
+
+# Copy built artifacts from builder
+COPY --from=builder /build/target/release/ironclaw /app/ironclaw
+COPY --from=builder /build/target/wasm32-wasi/release/chutes_stt.wasm /app/tools/chutes_stt.wasm
+COPY --from=builder /build/target/wasm32-wasi/release/chutes_tts.wasm /app/tools/chutes_tts.wasm
+
+# Copy configuration
+COPY src/config/settings.toml /app/settings.toml
+COPY agents/mentor /app/agents/mentor
+
+# Create required directories with proper permissions
+RUN mkdir -p /app/agents/mentor/checkpoints && \
+    mkdir -p /app/tmp/stt_input /app/tmp/stt_output /app/tmp/stt_cache && \
+    mkdir -p /app/tmp/tts_input /app/tmp/tts_output /app/tmp/tts_cache && \
+    mkdir -p /app/workspace/logs && \
+    chown -R mentor:mentor /app && \
+    chmod 755 /app/ironclaw && \
+    chmod 644 /app/settings.toml
+
+# Security: Set read-only permissions on critical files
+RUN chmod 444 /app/agents/mentor/persona.md && \
+    chmod 444 /app/agents/mentor/master-voice.wav && \
+    chmod 444 /app/agents/mentor/skills.md
+
+# Switch to non-root user
+USER mentor
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD /app/ironclaw health-check --agent mentor || exit 1
+
+# Security: Read-only root filesystem (except /app/tmp)
+# This is enforced at docker-compose level with read_only: true
+
+# Expose port for MCP communication (if enabled)
+EXPOSE 8793
+
+# Entrypoint
+ENTRYPOINT ["/app/ironclaw"]
+CMD ["run", "--agent", "mentor", "--no-onboard"]
+
+# ============================================================================
+# SECURITY HARDENING
+# ============================================================================
+# Applied at docker-compose level:
+# - read_only: true (except /app/tmp volumes)
+# - cap_drop: ALL
+# - cap_add: none required
+# - security_opt: no-new-privileges:true
+# - resources: limits on CPU and memory
+# - networks: internal only, no external exposure
