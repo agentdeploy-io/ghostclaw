@@ -1,11 +1,33 @@
+FROM node:20-bookworm-slim AS source
+
+ARG LIPPYCLAW_GIT_URL
+ARG LIPPYCLAW_GIT_REF
+
+RUN test -n "$LIPPYCLAW_GIT_URL" || (echo "LIPPYCLAW_GIT_URL build arg is required" >&2; exit 1)
+RUN test -n "$LIPPYCLAW_GIT_REF" || (echo "LIPPYCLAW_GIT_REF build arg is required" >&2; exit 1)
+
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    git \
+  && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /src
+RUN git clone "$LIPPYCLAW_GIT_URL" repo
+WORKDIR /src/repo
+RUN git fetch --depth 1 origin "$LIPPYCLAW_GIT_REF" \
+  && git checkout --detach FETCH_HEAD \
+  && git rev-parse --short HEAD
+RUN test -f /src/repo/voice-mcp/server.mjs || (echo "Pinned LIPPYCLAW_GIT_REF does not include voice-mcp/server.mjs" >&2; exit 1)
+
 FROM node:20-bookworm-slim
 
 WORKDIR /app
 
-COPY voice-mcp/package.json ./
+COPY --from=source /src/repo/voice-mcp/package.json ./
 RUN npm install --omit=dev
 
-COPY voice-mcp/server.mjs ./server.mjs
+COPY --from=source /src/repo/voice-mcp/server.mjs ./server.mjs
 
 EXPOSE 8792
 
