@@ -229,6 +229,35 @@ PERSONA
   set_env_var_if_missing "MENTOR_CHUTES_CSM_ENDPOINT" "https://chutes-csm-1b.chutes.ai/speak"
   set_env_var_if_missing "MENTOR_CHUTES_KOKORO_ENDPOINT" "https://chutes-kokoro.chutes.ai/speak"
   set_env_var_if_missing "MENTOR_CHUTES_ENABLE_KOKORO_FALLBACK" "true"
+  set_env_var_if_missing "ENABLE_MENTOR_IMAGE" "true"
+  set_env_var_if_missing "MENTOR_IMAGE_PROVIDER" "auto"
+  set_env_var_if_missing "MENTOR_IMAGE_API_KEY" "replace_with_mentor_image_api_key_or_same_as_voice"
+  set_env_var_if_missing "MENTOR_IMAGE_REQUEST_TIMEOUT_MS" "120000"
+  set_env_var_if_missing "MENTOR_IMAGE_MAX_PROMPT_CHARS" "1500"
+  set_env_var_if_missing "MENTOR_IMAGE_SIZE" "1024x1024"
+  set_env_var_if_missing "MENTOR_IMAGE_RESPONSE_FORMAT" "url"
+  set_env_var_if_missing "MENTOR_IMAGE_NUM_IMAGES" "1"
+  set_env_var_if_missing "MENTOR_CHUTES_IMAGE_MODE" "run_api"
+  set_env_var_if_missing "MENTOR_CHUTES_IMAGE_RUN_ENDPOINT" "https://llm.chutes.ai/v1/run"
+  set_env_var_if_missing "MENTOR_CHUTES_IMAGE_MODEL" "black-forest-labs/FLUX.1-schnell"
+  set_env_var_if_missing "MENTOR_CHUTES_IMAGE_ENDPOINT" ""
+  set_env_var_if_missing "MENTOR_NOVITA_API_BASE_URL" "https://api.novita.ai"
+  set_env_var_if_missing "MENTOR_NOVITA_API_KEY" "replace_with_novita_api_key_if_using_novita"
+  set_env_var_if_missing "MENTOR_NOVITA_IMAGE_ENDPOINT" "https://api.novita.ai/v3/seedream-3-0-txt2img"
+  set_env_var_if_missing "MENTOR_NOVITA_IMAGE_MODEL" "seedream-3.0"
+  set_env_var_if_missing "MENTOR_NOVITA_RESPONSE_FORMAT" "url"
+  set_env_var_if_missing "ENABLE_MENTOR_VIDEO" "true"
+  set_env_var_if_missing "MENTOR_VIDEO_PROVIDER" "auto"
+  set_env_var_if_missing "MENTOR_VIDEO_API_KEY" "replace_with_mentor_video_api_key_or_same_as_image"
+  set_env_var_if_missing "MENTOR_VIDEO_REQUEST_TIMEOUT_MS" "180000"
+  set_env_var_if_missing "MENTOR_VIDEO_DURATION_SECONDS" "5"
+  set_env_var_if_missing "MENTOR_VIDEO_SIZE" "1024x576"
+  set_env_var_if_missing "MENTOR_CHUTES_VIDEO_MODE" "run_api"
+  set_env_var_if_missing "MENTOR_CHUTES_VIDEO_RUN_ENDPOINT" "https://llm.chutes.ai/v1/run"
+  set_env_var_if_missing "MENTOR_CHUTES_VIDEO_MODEL" "genmo/mochi-1-preview"
+  set_env_var_if_missing "MENTOR_CHUTES_VIDEO_ENDPOINT" ""
+  set_env_var_if_missing "MENTOR_NOVITA_VIDEO_ENDPOINT" "https://api.novita.ai/v3/video/t2v"
+  set_env_var_if_missing "MENTOR_NOVITA_VIDEO_MODEL" "seedance-1.0"
   set_env_var_if_missing "MENTOR_VOICE_SAMPLE_SOURCE_PATH" "./mentor/master-voice.wav"
   set_env_var_if_missing "MENTOR_VOICE_SAMPLE_PATH" "/data/mentor/master-voice.wav"
   set_env_var_if_missing "MENTOR_VOICE_CONTEXT_PATH" "/data/mentor/voice_context.txt"
@@ -315,6 +344,29 @@ PERSONA
     mentor_voice_api_key="$(read_env_var MENTOR_VOICE_API_KEY)"
     if ! is_placeholder_or_empty "$mentor_voice_api_key"; then
       upsert_env_var "MENTOR_FISH_API_KEY" "$mentor_voice_api_key"
+    fi
+  fi
+
+  local mentor_image_api_key
+  mentor_image_api_key="$(read_env_var MENTOR_IMAGE_API_KEY)"
+  if is_placeholder_or_empty "$mentor_image_api_key"; then
+    mentor_voice_api_key="$(read_env_var MENTOR_VOICE_API_KEY)"
+    if ! is_placeholder_or_empty "$mentor_voice_api_key"; then
+      upsert_env_var "MENTOR_IMAGE_API_KEY" "$mentor_voice_api_key"
+    fi
+  fi
+
+  local mentor_video_api_key
+  mentor_video_api_key="$(read_env_var MENTOR_VIDEO_API_KEY)"
+  if is_placeholder_or_empty "$mentor_video_api_key"; then
+    mentor_image_api_key="$(read_env_var MENTOR_IMAGE_API_KEY)"
+    if ! is_placeholder_or_empty "$mentor_image_api_key"; then
+      upsert_env_var "MENTOR_VIDEO_API_KEY" "$mentor_image_api_key"
+    else
+      mentor_voice_api_key="$(read_env_var MENTOR_VOICE_API_KEY)"
+      if ! is_placeholder_or_empty "$mentor_voice_api_key"; then
+        upsert_env_var "MENTOR_VIDEO_API_KEY" "$mentor_voice_api_key"
+      fi
     fi
   fi
 
@@ -683,7 +735,7 @@ set_telegram_bot_commands() {
   local bot_token
   bot_token="$(read_env_var TELEGRAM_BOT_TOKEN)"
   local payload
-  payload='{"commands":[{"command":"help","description":"Show command list"},{"command":"mentor","description":"Chat with mentor"},{"command":"mentor_voice","description":"Mentor reply with voice"},{"command":"run","description":"Queue browser run"},{"command":"job","description":"Check job status"}]}'
+  payload='{"commands":[{"command":"help","description":"Show command list"},{"command":"mentor","description":"Chat with mentor"},{"command":"mentor_voice","description":"Mentor reply with voice"},{"command":"mentor_image","description":"Generate mentor image"},{"command":"mentor_video","description":"Generate mentor video"},{"command":"run","description":"Queue browser run"},{"command":"job","description":"Check job status"}]}'
 
   local response_file
   response_file="$(mktemp)"
@@ -1004,6 +1056,23 @@ discover_local_tunnel_url() {
   exit 1
 }
 
+wait_for_tunnel_ready() {
+  local tunnel_url="$1"
+  local attempts=1
+
+  while [[ "$attempts" -le 30 ]]; do
+    if curl -sS --connect-timeout 5 --max-time 8 -o /dev/null "$tunnel_url/"; then
+      return 0
+    fi
+    attempts=$((attempts + 1))
+    sleep 2
+  done
+
+  echo "ERROR: tunnel URL is not reachable yet: $tunnel_url" >&2
+  echo "Hint: check cloudflared logs and DNS propagation before starting ironclaw" >&2
+  exit 1
+}
+
 configure_local_tunnel_url() {
   if ! telegram_configured; then
     return 0
@@ -1011,6 +1080,7 @@ configure_local_tunnel_url() {
 
   local tunnel_url
   tunnel_url="$(discover_local_tunnel_url)"
+  wait_for_tunnel_ready "$tunnel_url"
   upsert_env_var "TUNNEL_URL" "$tunnel_url"
   echo "[tunnel] configured TUNNEL_URL=$tunnel_url"
 }
@@ -1337,7 +1407,7 @@ Commands:
   logs [service]     Tail logs for all services or a single service
   shell              Open interactive shell in agent-sandbox
   webhook:set        Set Telegram webhook for local tunnel (single bot token)
-  telegram:commands  Register Telegram slash commands (/mentor, /mentor_voice, /run, /job)
+  telegram:commands  Register Telegram slash commands (/mentor, /mentor_voice, /mentor_image, /mentor_video, /run, /job)
   telegram:autobind  Auto-bind TELEGRAM_ALLOWED_CHAT_IDS from first inbound Telegram message
   mentor:clone [audio] Sync sample audio and bootstrap Chutes whisper context for CSM voice clone
   smoke              Validate local stack readiness
@@ -1409,6 +1479,8 @@ main() {
       configure_local_tunnel_url
       log "INFO" "step=compose_up"
       compose_local up -d
+      log "INFO" "step=compose_recreate_ironclaw_for_env"
+      compose_local up -d --force-recreate --no-deps ironclaw
       log "INFO" "step=smoke_local"
       smoke_local
       log "INFO" "step=ensure_mcp_servers_registered"
@@ -1461,6 +1533,8 @@ main() {
       configure_local_tunnel_url
       log "INFO" "step=compose_up"
       compose_local up -d
+      log "INFO" "step=compose_recreate_ironclaw_for_env"
+      compose_local up -d --force-recreate --no-deps ironclaw
       log "INFO" "step=smoke_local"
       smoke_local
       log "INFO" "step=ensure_mcp_servers_registered"
