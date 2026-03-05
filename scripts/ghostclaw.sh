@@ -54,6 +54,7 @@ BUILDABLE_SERVICES=(
   "camoufox-tool"
   "camoufox-mcp"
   "mentor-mcp"
+  "voice-mcp"
   "agent-sandbox"
 )
 
@@ -177,6 +178,8 @@ PERSONA
 
   set_env_var_if_missing "IRONCLAW_GIT_URL" "replace_with_official_ironclaw_git_url"
   set_env_var_if_missing "IRONCLAW_GIT_REF" "replace_with_git_tag_or_commit"
+  set_env_var_if_missing "LIPPYCLAW_GIT_URL" ""
+  set_env_var_if_missing "LIPPYCLAW_GIT_REF" ""
   set_env_var_if_missing "POSTGRES_DB" "ironclaw"
   set_env_var_if_missing "POSTGRES_USER" "ironclaw"
   set_env_var_if_missing "POSTGRES_PASSWORD" "$(openssl rand -hex 32)"
@@ -190,7 +193,7 @@ PERSONA
   set_env_var_if_missing "SUB_LLM_MODEL" "MiniMaxAI/MiniMax-M2.5-TEE"
   set_env_var_if_missing "SUB_LLM_API_KEY" "replace_with_sub_llm_api_key_or_same_as_main"
 
-  set_env_var_if_missing "MENTOR_NAME" "Ghostclaw Mentor"
+  set_env_var_if_missing "MENTOR_NAME" "Lippyclaw Mentor"
   set_env_var_if_missing "MENTOR_PERSONA_FILE" "/mentor/persona.md"
   set_env_var_if_missing "MENTOR_MEMORY_FILE" "/data/mentor/memory.json"
   set_env_var_if_missing "MENTOR_MEMORY_WINDOW" "14"
@@ -199,23 +202,54 @@ PERSONA
   set_env_var_if_missing "MENTOR_LLM_API_KEY" "replace_with_mentor_llm_api_key_or_same_as_sub"
   set_env_var_if_missing "ENABLE_MENTOR_VOICE" "true"
   set_env_var_if_missing "MENTOR_AUTO_BOOTSTRAP_VOICE" "true"
+  set_env_var_if_missing "MENTOR_VOICE_PROVIDER" "auto"
   set_env_var_if_missing "MENTOR_VOICE_API_BASE_URL" "https://llm.chutes.ai/v1"
   set_env_var_if_missing "MENTOR_VOICE_API_KEY" "replace_with_mentor_voice_api_key_or_same_as_main"
-  set_env_var_if_missing "MENTOR_CHUTES_VOICE_MODE" "run_api"
+  set_env_var_if_missing "MENTOR_FISH_API_BASE_URL" "https://api.fish.audio"
+  set_env_var_if_missing "MENTOR_FISH_API_KEY" "replace_with_fish_audio_api_key"
+  set_env_var_if_missing "MENTOR_FISH_TTS_ENDPOINT" "https://api.fish.audio/v1/tts"
+  set_env_var_if_missing "MENTOR_FISH_ASR_ENDPOINT" "https://api.fish.audio/v1/asr"
+  set_env_var_if_missing "MENTOR_FISH_MODEL" "s1"
+  set_env_var_if_missing "MENTOR_FISH_REFERENCE_ID" ""
+  set_env_var_if_missing "MENTOR_FISH_FORMAT" "mp3"
+  set_env_var_if_missing "MENTOR_FISH_LATENCY" "normal"
+  set_env_var_if_missing "MENTOR_FISH_NORMALIZE" "true"
+  set_env_var_if_missing "MENTOR_FISH_IGNORE_TIMESTAMPS" "true"
+  set_env_var_if_missing "MENTOR_FISH_TEMPERATURE" "0.7"
+  set_env_var_if_missing "MENTOR_FISH_TOP_P" "0.7"
+  set_env_var_if_missing "MENTOR_FISH_REPETITION_PENALTY" "1.2"
+  set_env_var_if_missing "MENTOR_FISH_MAX_NEW_TOKENS" "1024"
+  set_env_var_if_missing "MENTOR_FISH_CHUNK_LENGTH" "240"
+  set_env_var_if_missing "MENTOR_CHUTES_VOICE_MODE" "chutes_direct"
   set_env_var_if_missing "MENTOR_CHUTES_RUN_ENDPOINT" "https://llm.chutes.ai/v1/run"
   set_env_var_if_missing "MENTOR_CHUTES_WHISPER_MODEL" "openai/whisper-large-v3-turbo"
   set_env_var_if_missing "MENTOR_CHUTES_CSM_MODEL" "sesame/csm-1b"
   set_env_var_if_missing "MENTOR_CHUTES_KOKORO_MODEL" "hexgrad/Kokoro-82M"
+  set_env_var_if_missing "MENTOR_CHUTES_WHISPER_ENDPOINT" "https://chutes-whisper-large-v3.chutes.ai/transcribe"
+  set_env_var_if_missing "MENTOR_CHUTES_CSM_ENDPOINT" "https://chutes-csm-1b.chutes.ai/speak"
+  set_env_var_if_missing "MENTOR_CHUTES_KOKORO_ENDPOINT" "https://chutes-kokoro.chutes.ai/speak"
   set_env_var_if_missing "MENTOR_CHUTES_ENABLE_KOKORO_FALLBACK" "true"
   set_env_var_if_missing "MENTOR_VOICE_SAMPLE_SOURCE_PATH" "./mentor/master-voice.wav"
   set_env_var_if_missing "MENTOR_VOICE_SAMPLE_PATH" "/data/mentor/master-voice.wav"
   set_env_var_if_missing "MENTOR_VOICE_CONTEXT_PATH" "/data/mentor/voice_context.txt"
   set_env_var_if_missing "MENTOR_VOICE_AUTO_TRANSCRIBE" "true"
+  set_env_var_if_missing "ENABLE_VOICE" "true"
+  set_env_var_if_missing "VOICE_MODE" "chutes_direct"
+  set_env_var_if_missing "VOICE_API_KEY" "replace_with_voice_api_key_or_same_as_main"
+  set_env_var_if_missing "VOICE_CHUTES_WHISPER_ENDPOINT" "https://chutes-whisper-large-v3.chutes.ai/transcribe"
+  set_env_var_if_missing "VOICE_CHUTES_CSM_ENDPOINT" "https://chutes-csm-1b.chutes.ai/speak"
+  set_env_var_if_missing "VOICE_CHUTES_KOKORO_ENDPOINT" "https://chutes-kokoro.chutes.ai/speak"
   set_env_var_if_missing "MCP_CAMOUFOX_DEFAULT_ENABLED" "true"
   set_env_var_if_missing "MCP_MENTOR_DEFAULT_ENABLED" "true"
 
   set_env_var_if_missing "TELEGRAM_BOT_TOKEN" "replace_with_telegram_bot_token"
   set_env_var_if_missing "TELEGRAM_WEBHOOK_SECRET" "$(openssl rand -hex 32)"
+  set_env_var_if_missing "TELEGRAM_ALLOWED_CHAT_IDS" ""
+  set_env_var_if_missing "TELEGRAM_AUTO_BIND_FIRST_CHAT" "true"
+  set_env_var_if_missing "TELEGRAM_AUTO_BIND_TIMEOUT_SECONDS" "120"
+  set_env_var_if_missing "TUNNEL_URL" ""
+  set_env_var_if_missing "WASM_CHANNELS_DIR" "/home/ironclaw/.ironclaw/channels-v2"
+  set_env_var_if_missing "WASM_CHANNEL_FORCE_SYNC" "telegram"
   set_env_var_if_missing "SECRETS_MASTER_KEY" "$(openssl rand -hex 32)"
   set_env_var_if_missing "TELEGRAM_WEBHOOK_PATH" "/webhook/telegram"
 
@@ -261,6 +295,10 @@ PERSONA
     fi
   fi
 
+  if [[ "$(read_env_var MENTOR_NAME)" == "Ghostclaw Mentor" ]]; then
+    upsert_env_var "MENTOR_NAME" "Lippyclaw Mentor"
+  fi
+
   local mentor_voice_api_key
   mentor_voice_api_key="$(read_env_var MENTOR_VOICE_API_KEY)"
   if is_placeholder_or_empty "$mentor_voice_api_key"; then
@@ -268,6 +306,25 @@ PERSONA
     main_llm_api_key="$(read_env_var MAIN_LLM_API_KEY)"
     if ! is_placeholder_or_empty "$main_llm_api_key"; then
       upsert_env_var "MENTOR_VOICE_API_KEY" "$main_llm_api_key"
+    fi
+  fi
+
+  local mentor_fish_api_key
+  mentor_fish_api_key="$(read_env_var MENTOR_FISH_API_KEY)"
+  if is_placeholder_or_empty "$mentor_fish_api_key"; then
+    mentor_voice_api_key="$(read_env_var MENTOR_VOICE_API_KEY)"
+    if ! is_placeholder_or_empty "$mentor_voice_api_key"; then
+      upsert_env_var "MENTOR_FISH_API_KEY" "$mentor_voice_api_key"
+    fi
+  fi
+
+  local voice_api_key
+  voice_api_key="$(read_env_var VOICE_API_KEY)"
+  if is_placeholder_or_empty "$voice_api_key"; then
+    local main_llm_api_key
+    main_llm_api_key="$(read_env_var MAIN_LLM_API_KEY)"
+    if ! is_placeholder_or_empty "$main_llm_api_key"; then
+      upsert_env_var "VOICE_API_KEY" "$main_llm_api_key"
     fi
   fi
 
@@ -288,6 +345,19 @@ PERSONA
 
   prompt_required_if_missing "IRONCLAW_GIT_URL" "Official IronClaw Git URL: " false
   prompt_required_if_missing "IRONCLAW_GIT_REF" "Official IronClaw Git ref (tag/commit): " false
+
+  local lippyclaw_git_url
+  lippyclaw_git_url="$(read_env_var LIPPYCLAW_GIT_URL)"
+  if is_placeholder_or_empty "$lippyclaw_git_url"; then
+    upsert_env_var "LIPPYCLAW_GIT_URL" "$(read_env_var IRONCLAW_GIT_URL)"
+  fi
+
+  local lippyclaw_git_ref
+  lippyclaw_git_ref="$(read_env_var LIPPYCLAW_GIT_REF)"
+  if is_placeholder_or_empty "$lippyclaw_git_ref"; then
+    upsert_env_var "LIPPYCLAW_GIT_REF" "$(read_env_var IRONCLAW_GIT_REF)"
+  fi
+
   echo "[init] optional LLM/Telegram settings can be configured later via onboard or .env"
 
   chmod 600 "$ENV_FILE"
@@ -327,6 +397,18 @@ validate_ironclaw_build_env() {
     value="$(read_env_var "$key")"
     if is_placeholder_or_empty "$value"; then
       echo "ERROR: required env var missing or placeholder for ironclaw build: $key" >&2
+      exit 1
+    fi
+  done
+}
+
+validate_lippyclaw_build_env() {
+  local key
+  for key in LIPPYCLAW_GIT_URL LIPPYCLAW_GIT_REF; do
+    local value
+    value="$(read_env_var "$key")"
+    if is_placeholder_or_empty "$value"; then
+      echo "ERROR: required env var missing or placeholder for sidecar build: $key" >&2
       exit 1
     fi
   done
@@ -374,13 +456,24 @@ build_images() {
     targets=("$target")
   fi
 
+  local need_ironclaw_build_env=0
+  local need_lippyclaw_build_env=0
   local svc
   for svc in "${targets[@]}"; do
     if [[ "$svc" == "ironclaw" ]]; then
-      validate_ironclaw_build_env
-      break
+      need_ironclaw_build_env=1
+    fi
+    if [[ "$svc" == "mentor-mcp" || "$svc" == "voice-mcp" ]]; then
+      need_lippyclaw_build_env=1
     fi
   done
+
+  if [[ "$need_ironclaw_build_env" -eq 1 ]]; then
+    validate_ironclaw_build_env
+  fi
+  if [[ "$need_lippyclaw_build_env" -eq 1 ]]; then
+    validate_lippyclaw_build_env
+  fi
 
   local -a build_cmd
   build_cmd=(build)
@@ -618,6 +711,93 @@ set_telegram_bot_commands() {
   return 1
 }
 
+extract_chat_id_from_ironclaw_logs() {
+  local since_ts="$1"
+  local raw
+  raw="$(compose_local logs --no-color --since "$since_ts" ironclaw 2>/dev/null || true)"
+  if [[ -z "$raw" ]]; then
+    return 1
+  fi
+
+  local cleaned
+  cleaned="$(printf '%s\n' "$raw" | sed -E 's/\x1B\[[0-9;]*[A-Za-z]//g')"
+
+  local line
+  line="$(printf '%s\n' "$cleaned" | grep -E 'WASM emit_message called .*user_id=' | tail -n 1 || true)"
+  if [[ -z "$line" ]]; then
+    return 1
+  fi
+
+  local chat_id
+  chat_id="$(printf '%s\n' "$line" | sed -E 's/.*user_id=([-0-9]+).*/\1/' || true)"
+  if [[ -z "$chat_id" || ! "$chat_id" =~ ^-?[0-9]+$ ]]; then
+    return 1
+  fi
+
+  printf '%s\n' "$chat_id"
+  return 0
+}
+
+auto_bind_telegram_allowed_chat_id() {
+  if ! telegram_configured; then
+    return 0
+  fi
+
+  local current_allowed
+  current_allowed="$(read_env_var TELEGRAM_ALLOWED_CHAT_IDS)"
+  if [[ -n "$current_allowed" ]]; then
+    echo "[telegram] allowlist already configured: $current_allowed"
+    return 0
+  fi
+
+  local auto_bind
+  auto_bind="$(read_env_var TELEGRAM_AUTO_BIND_FIRST_CHAT)"
+  if [[ "$auto_bind" != "true" ]]; then
+    echo "[telegram] auto-bind disabled (TELEGRAM_AUTO_BIND_FIRST_CHAT=$auto_bind)"
+    return 0
+  fi
+
+  local timeout_seconds
+  timeout_seconds="$(read_env_var TELEGRAM_AUTO_BIND_TIMEOUT_SECONDS)"
+  if [[ -z "$timeout_seconds" || ! "$timeout_seconds" =~ ^[0-9]+$ ]]; then
+    timeout_seconds="120"
+  fi
+
+  local since_ts
+  since_ts="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+  local started_at
+  started_at="$(date +%s)"
+
+  echo "[telegram] TELEGRAM_ALLOWED_CHAT_IDS is empty."
+  echo "[telegram] Auto-bind is enabled: send any message to your bot now."
+  echo "[telegram] Waiting up to ${timeout_seconds}s for first message..."
+
+  local chat_id=""
+  while true; do
+    chat_id="$(extract_chat_id_from_ironclaw_logs "$since_ts" || true)"
+    if [[ -n "$chat_id" ]]; then
+      break
+    fi
+
+    local now
+    now="$(date +%s)"
+    local elapsed=$((now - started_at))
+    if (( elapsed >= timeout_seconds )); then
+      echo "[telegram] No inbound message observed within ${timeout_seconds}s."
+      echo "[telegram] Leaving TELEGRAM_ALLOWED_CHAT_IDS empty (open access)."
+      echo "[telegram] Run ./scripts/ghostclaw.sh telegram:autobind after messaging the bot."
+      return 0
+    fi
+    sleep 2
+  done
+
+  upsert_env_var "TELEGRAM_ALLOWED_CHAT_IDS" "$chat_id"
+  echo "[telegram] Auto-bound TELEGRAM_ALLOWED_CHAT_IDS=$chat_id"
+  echo "[telegram] Restarting ironclaw to apply allowlist..."
+  compose_local restart ironclaw
+  wait_for_ironclaw
+}
+
 resolve_mentor_voice_source() {
   local preferred="${1:-}"
   if [[ -n "$preferred" ]]; then
@@ -795,7 +975,11 @@ auto_bootstrap_mentor_voice_if_enabled() {
     return 0
   fi
 
-  bootstrap_mentor_voice_context "$resolved_source"
+  if ! bootstrap_mentor_voice_context "$resolved_source"; then
+    echo "[mentor] warning: automatic voice bootstrap failed; continuing startup"
+    echo "[mentor] hint: verify MENTOR_CHUTES_*_ENDPOINT or MENTOR_CHUTES_RUN_ENDPOINT and rerun ./scripts/ghostclaw.sh mentor:clone"
+    return 0
+  fi
 }
 discover_local_tunnel_url() {
   if [[ -n "${LOCAL_TUNNEL_URL:-}" ]]; then
@@ -818,6 +1002,17 @@ discover_local_tunnel_url() {
   echo "ERROR: failed to discover cloudflared public URL from logs." >&2
   echo "Hint: docker compose --env-file $ENV_FILE -f $REPO_ROOT/docker-compose.yml -f $REPO_ROOT/docker-compose.local.yml logs cloudflared" >&2
   exit 1
+}
+
+configure_local_tunnel_url() {
+  if ! telegram_configured; then
+    return 0
+  fi
+
+  local tunnel_url
+  tunnel_url="$(discover_local_tunnel_url)"
+  upsert_env_var "TUNNEL_URL" "$tunnel_url"
+  echo "[tunnel] configured TUNNEL_URL=$tunnel_url"
 }
 
 set_telegram_webhook() {
@@ -1133,16 +1328,17 @@ Usage:
 
 Commands:
   init               Generate or repair .env using secure defaults
-  build [target]     Build images (all or one: ironclaw|camoufox-tool|camoufox-mcp|mentor-mcp|agent-sandbox)
+  build [target]     Build images (all or one: ironclaw|camoufox-tool|camoufox-mcp|mentor-mcp|voice-mcp|agent-sandbox)
   onboard            Run official `ironclaw onboard` inside container
-  up [voice_sample]  Start local stack (auto webhook + mentor voice bootstrap)
-  restart [sample]   Full local restart (down + up + smoke)
+  up [voice_sample]  Start local stack (auto tunnel URL + mentor voice bootstrap)
+  restart [sample]   Full local restart (down + tunnel bootstrap + up + smoke)
   down               Stop local stack
   health             Show local service and endpoint health
   logs [service]     Tail logs for all services or a single service
   shell              Open interactive shell in agent-sandbox
   webhook:set        Set Telegram webhook for local tunnel (single bot token)
   telegram:commands  Register Telegram slash commands (/mentor, /mentor_voice, /run, /job)
+  telegram:autobind  Auto-bind TELEGRAM_ALLOWED_CHAT_IDS from first inbound Telegram message
   mentor:clone [audio] Sync sample audio and bootstrap Chutes whisper context for CSM voice clone
   smoke              Validate local stack readiness
   deploy:vps         Deploy stack to Hostinger VPS
@@ -1207,6 +1403,10 @@ main() {
       ensure_ironclaw_home_writable
       log "INFO" "step=auto_bootstrap_mentor_voice_if_enabled"
       auto_bootstrap_mentor_voice_if_enabled
+      log "INFO" "step=compose_up_edge_services"
+      compose_local up -d caddy cloudflared
+      log "INFO" "step=configure_local_tunnel_url"
+      configure_local_tunnel_url
       log "INFO" "step=compose_up"
       compose_local up -d
       log "INFO" "step=smoke_local"
@@ -1225,14 +1425,12 @@ main() {
         wait_for_ironclaw
       fi
       if telegram_configured; then
-        log "INFO" "step=set_telegram_webhook"
-        if ! (set_telegram_webhook "local"); then
-          echo "[up] warning: telegram webhook setup failed; continuing"
-        fi
         log "INFO" "step=set_telegram_bot_commands"
         if ! (set_telegram_bot_commands); then
           echo "[up] warning: telegram command registration failed; continuing"
         fi
+        log "INFO" "step=auto_bind_telegram_allowed_chat_id"
+        auto_bind_telegram_allowed_chat_id
       else
         echo "[up] telegram not configured in .env (TELEGRAM_BOT_TOKEN), skipping webhook/commands"
       fi
@@ -1257,6 +1455,10 @@ main() {
       ensure_ironclaw_home_writable
       log "INFO" "step=auto_bootstrap_mentor_voice_if_enabled"
       auto_bootstrap_mentor_voice_if_enabled
+      log "INFO" "step=compose_up_edge_services"
+      compose_local up -d caddy cloudflared
+      log "INFO" "step=configure_local_tunnel_url"
+      configure_local_tunnel_url
       log "INFO" "step=compose_up"
       compose_local up -d
       log "INFO" "step=smoke_local"
@@ -1275,14 +1477,12 @@ main() {
         wait_for_ironclaw
       fi
       if telegram_configured; then
-        log "INFO" "step=set_telegram_webhook"
-        if ! (set_telegram_webhook "local"); then
-          echo "[restart] warning: telegram webhook setup failed; continuing"
-        fi
         log "INFO" "step=set_telegram_bot_commands"
         if ! (set_telegram_bot_commands); then
           echo "[restart] warning: telegram command registration failed; continuing"
         fi
+        log "INFO" "step=auto_bind_telegram_allowed_chat_id"
+        auto_bind_telegram_allowed_chat_id
       else
         echo "[restart] telegram not configured in .env (TELEGRAM_BOT_TOKEN), skipping webhook/commands"
       fi
@@ -1358,6 +1558,18 @@ main() {
       validate_telegram_env
       log "INFO" "step=set_telegram_bot_commands"
       set_telegram_bot_commands
+      ;;
+
+    telegram:autobind)
+      require_cmd docker
+      log "INFO" "step=ensure_env_file"
+      ensure_env_file
+      log "INFO" "step=validate_telegram_env"
+      validate_telegram_env
+      log "INFO" "step=wait_for_ironclaw"
+      wait_for_ironclaw
+      log "INFO" "step=auto_bind_telegram_allowed_chat_id"
+      auto_bind_telegram_allowed_chat_id
       ;;
 
     mentor:clone)

@@ -60,20 +60,38 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.mentor-mcp
+      args:
+        LIPPYCLAW_GIT_URL: ${LIPPYCLAW_GIT_URL}
+        LIPPYCLAW_GIT_REF: ${LIPPYCLAW_GIT_REF}
     restart: unless-stopped
     environment:
       MENTOR_MCP_PORT: 8791
-      MENTOR_NAME: ${MENTOR_NAME:-Ghostclaw Mentor}
-      MENTOR_PERSONA_FILE: ${MENTOR_PERSONA_FILE:-/agents/mentor/persona.md}
-      MENTOR_SKILLS_FILE: ${MENTOR_SKILLS_FILE:-/agents/mentor/skills.md}
+      MENTOR_NAME: ${MENTOR_NAME:-Lippyclaw Mentor}
+      MENTOR_PERSONA_FILE: ${MENTOR_PERSONA_FILE:-/mentor/persona.md}
       MENTOR_MEMORY_FILE: ${MENTOR_MEMORY_FILE:-/data/mentor/memory.json}
       MENTOR_MEMORY_WINDOW: ${MENTOR_MEMORY_WINDOW:-14}
       MENTOR_LLM_BASE_URL: ${MENTOR_LLM_BASE_URL:-https://llm.chutes.ai/v1}
       MENTOR_LLM_API_KEY: ${MENTOR_LLM_API_KEY:-}
       MENTOR_LLM_MODEL: ${MENTOR_LLM_MODEL:-MiniMaxAI/MiniMax-M2.5-TEE}
       ENABLE_MENTOR_VOICE: ${ENABLE_MENTOR_VOICE:-false}
+      MENTOR_VOICE_PROVIDER: ${MENTOR_VOICE_PROVIDER:-auto}
       MENTOR_VOICE_API_BASE_URL: ${MENTOR_VOICE_API_BASE_URL:-https://llm.chutes.ai/v1}
       MENTOR_VOICE_API_KEY: ${MENTOR_VOICE_API_KEY:-}
+      MENTOR_FISH_API_BASE_URL: ${MENTOR_FISH_API_BASE_URL:-https://api.fish.audio}
+      MENTOR_FISH_API_KEY: ${MENTOR_FISH_API_KEY:-}
+      MENTOR_FISH_TTS_ENDPOINT: ${MENTOR_FISH_TTS_ENDPOINT:-https://api.fish.audio/v1/tts}
+      MENTOR_FISH_ASR_ENDPOINT: ${MENTOR_FISH_ASR_ENDPOINT:-https://api.fish.audio/v1/asr}
+      MENTOR_FISH_MODEL: ${MENTOR_FISH_MODEL:-s1}
+      MENTOR_FISH_REFERENCE_ID: ${MENTOR_FISH_REFERENCE_ID:-}
+      MENTOR_FISH_FORMAT: ${MENTOR_FISH_FORMAT:-mp3}
+      MENTOR_FISH_LATENCY: ${MENTOR_FISH_LATENCY:-normal}
+      MENTOR_FISH_NORMALIZE: ${MENTOR_FISH_NORMALIZE:-true}
+      MENTOR_FISH_IGNORE_TIMESTAMPS: ${MENTOR_FISH_IGNORE_TIMESTAMPS:-true}
+      MENTOR_FISH_TEMPERATURE: ${MENTOR_FISH_TEMPERATURE:-0.7}
+      MENTOR_FISH_TOP_P: ${MENTOR_FISH_TOP_P:-0.7}
+      MENTOR_FISH_REPETITION_PENALTY: ${MENTOR_FISH_REPETITION_PENALTY:-1.2}
+      MENTOR_FISH_MAX_NEW_TOKENS: ${MENTOR_FISH_MAX_NEW_TOKENS:-1024}
+      MENTOR_FISH_CHUNK_LENGTH: ${MENTOR_FISH_CHUNK_LENGTH:-240}
       MENTOR_CHUTES_VOICE_MODE: ${MENTOR_CHUTES_VOICE_MODE:-run_api}
       MENTOR_CHUTES_RUN_ENDPOINT: ${MENTOR_CHUTES_RUN_ENDPOINT:-https://llm.chutes.ai/v1/run}
       MENTOR_CHUTES_WHISPER_MODEL: ${MENTOR_CHUTES_WHISPER_MODEL:-openai/whisper-large-v3-turbo}
@@ -87,7 +105,7 @@ services:
     volumes:
       - ./data/artifacts:/data/artifacts
       - ./data/mentor:/data/mentor
-      - ./agents/mentor:/agents/mentor:ro
+      - ./mentor:/mentor:ro
     expose:
       - "8791"
     healthcheck:
@@ -100,6 +118,9 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.voice-mcp
+      args:
+        LIPPYCLAW_GIT_URL: ${LIPPYCLAW_GIT_URL}
+        LIPPYCLAW_GIT_REF: ${LIPPYCLAW_GIT_REF}
     restart: unless-stopped
     environment:
       VOICE_MCP_PORT: 8792
@@ -152,6 +173,8 @@ services:
       HTTP_HOST: 0.0.0.0
       HTTP_PORT: "8090"
       HTTP_WEBHOOK_SECRET: ${TELEGRAM_WEBHOOK_SECRET}
+      WASM_CHANNELS_DIR: ${WASM_CHANNELS_DIR:-/home/ironclaw/.ironclaw/channels-v2}
+      WASM_CHANNEL_FORCE_SYNC: ${WASM_CHANNEL_FORCE_SYNC:-telegram}
     depends_on:
       postgres:
         condition: service_healthy
