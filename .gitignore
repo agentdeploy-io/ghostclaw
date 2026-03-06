@@ -9,3 +9,4 @@ caddy_config
 .env.production
 *.log
 .roorules.md
+scripts/test-mentor-mcp.sh
